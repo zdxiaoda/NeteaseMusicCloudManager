@@ -17,9 +17,13 @@ export declare class DiffSyncService {
         cloudOnlyPending: number;
         downloadSummary?: BatchTaskSummary;
     }>;
-    private findFuzzy;
     private exactKey;
-    private normalize;
+    private computeMatchScore;
+    private normalizeTitle;
+    private normalizeArtist;
+    private normalizeFileName;
+    private parseArtistTitleFromFileName;
+    private normalizeCommon;
     private runBatch;
     private mergeSummary;
     private itemName;
