@@ -11,7 +11,10 @@ const MUSIC_EXTENSIONS = ["mp3", "flac", "wav", "m4a", "ogg", "aac"];
 export class LocalScanner {
   constructor(private readonly cacheRepo: CacheRepo) {}
 
-  async scan(folder: string): Promise<LocalSong[]> {
+  async scan(
+    folder: string,
+    onProgress?: (progress: { current: number; total: number; filePath: string; scanned: number; skipped: number }) => void
+  ): Promise<LocalSong[]> {
     const patterns = MUSIC_EXTENSIONS.map((ext) => `**/*.${ext}`);
     const files = await fg(patterns, {
       cwd: folder,
@@ -20,18 +23,35 @@ export class LocalScanner {
       caseSensitiveMatch: false
     });
     const songs: LocalSong[] = [];
-    for (const filePath of files) {
-      const stat = fs.statSync(filePath);
-      const metadata = await parseFile(filePath).catch(() => undefined);
-      songs.push({
-        path: filePath,
-        fileName: path.basename(filePath),
-        title: metadata?.common.title || path.parse(filePath).name,
-        artist: metadata?.common.artist || "未知歌手",
-        album: metadata?.common.album || "未知专辑",
-        durationMs: Math.round((metadata?.format.duration || 0) * 1000),
-        size: stat.size,
-        md5: await this.hashMd5(filePath)
+    let skipped = 0;
+    for (let i = 0; i < files.length; i += 1) {
+      const filePath = files[i];
+      if (!filePath) {
+        skipped += 1;
+        continue;
+      }
+      try {
+        const stat = fs.statSync(filePath);
+        const metadata = await parseFile(filePath).catch(() => undefined);
+        songs.push({
+          path: filePath,
+          fileName: path.basename(filePath),
+          title: metadata?.common.title || path.parse(filePath).name,
+          artist: metadata?.common.artist || "未知歌手",
+          album: metadata?.common.album || "未知专辑",
+          durationMs: Math.round((metadata?.format.duration || 0) * 1000),
+          size: stat.size,
+          md5: await this.hashMd5(filePath)
+        });
+      } catch {
+        skipped += 1;
+      }
+      onProgress?.({
+        current: i + 1,
+        total: files.length,
+        filePath,
+        scanned: songs.length,
+        skipped
       });
     }
     this.cacheRepo.replaceLocalSongs(songs);

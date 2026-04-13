@@ -37,14 +37,32 @@ export class AuthService {
     async waitQrLogin(key, timeoutMs = 120000) {
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
-            const result = await this.apiClient.get("/login/qr/check", { key });
-            if (result.code === 803) {
-                this.persistSession(result.cookie, "qr");
-                return true;
+            try {
+                const result = await this.apiClient.get("/login/qr/check", { key }, { timeoutMs: 40000 });
+                if (result.code === 803) {
+                    this.persistSession(result.cookie, "qr");
+                    return true;
+                }
+            }
+            catch (error) {
+                const err = error;
+                const message = err.message || "";
+                const code = err.code || "";
+                // Transient network errors should not break the QR polling loop.
+                const retryable = message.includes("timeout") ||
+                    message.includes("socket hang up") ||
+                    message.includes("ECONNRESET") ||
+                    message.includes("ECONNREFUSED") ||
+                    code === "ECONNABORTED" ||
+                    code === "ECONNRESET" ||
+                    code === "ECONNREFUSED";
+                if (!retryable) {
+                    throw error;
+                }
             }
             await new Promise((resolve) => setTimeout(resolve, 1500));
         }
-        return false;
+        return this.ensureLogin();
     }
     logout() {
         this.sessionStore.clearSession();

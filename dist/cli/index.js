@@ -9,6 +9,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import QRCode from "qrcode";
 import { createApp } from "../bootstrap.js";
 import { startTui } from "../tui/app.js";
 import { ensureApiServer } from "../infra/api/api-server-manager.js";
@@ -27,25 +28,33 @@ const commandExists = (name) => {
     const result = spawnSync(checker, [name], { stdio: "ignore" });
     return result.status === 0;
 };
-const renderQrImageInTerminal = (dataUri) => {
+const renderQrInTerminal = async (dataUri) => {
     const prefix = "data:image/png;base64,";
     if (!dataUri.startsWith(prefix))
-        return false;
+        return "none";
     const tmpFile = path.join(os.tmpdir(), `ncm-qr-${Date.now()}.png`);
     try {
         fs.writeFileSync(tmpFile, Buffer.from(dataUri.slice(prefix.length), "base64"));
         if (commandExists("kitten")) {
             const res = spawnSync("kitten", ["icat", tmpFile], { stdio: "inherit" });
-            return res.status === 0;
+            if (res.status === 0)
+                return "image";
         }
         if (commandExists("imgcat")) {
             const res = spawnSync("imgcat", [tmpFile], { stdio: "inherit" });
-            return res.status === 0;
+            if (res.status === 0)
+                return "image";
         }
-        return false;
+        const textQr = await QRCode.toString(dataUri, {
+            type: "terminal",
+            errorCorrectionLevel: "M",
+            small: true
+        });
+        console.log(textQr);
+        return "text";
     }
     catch {
-        return false;
+        return "none";
     }
     finally {
         try {
@@ -54,6 +63,24 @@ const renderQrImageInTerminal = (dataUri) => {
         catch {
             // ignore temp file cleanup errors
         }
+    }
+};
+const openQrWithXdgOpen = (dataUri) => {
+    const prefix = "data:image/png;base64,";
+    if (!dataUri.startsWith(prefix))
+        return false;
+    if (process.platform !== "linux")
+        return false;
+    if (!commandExists("xdg-open"))
+        return false;
+    const tmpFile = path.join(os.tmpdir(), `ncm-qr-open-${Date.now()}.png`);
+    try {
+        fs.writeFileSync(tmpFile, Buffer.from(dataUri.slice(prefix.length), "base64"));
+        const res = spawnSync("xdg-open", [tmpFile], { stdio: "ignore" });
+        return res.status === 0;
+    }
+    catch {
+        return false;
     }
 };
 program
@@ -88,10 +115,19 @@ program
     else {
         const qr = await app.authService.createQr();
         console.log(chalk.cyan("请扫码登录："));
-        const rendered = renderQrImageInTerminal(qr.qrimg);
-        if (!rendered) {
-            console.log(chalk.yellow("当前终端图片渲染不可用，回退为 data URL："));
-            console.log(qr.qrimg);
+        const rendered = await renderQrInTerminal(qr.qrimg);
+        if (rendered === "text") {
+            console.log(chalk.gray("已使用终端文本二维码渲染。"));
+        }
+        else if (rendered === "none") {
+            const opened = openQrWithXdgOpen(qr.qrimg);
+            if (opened) {
+                console.log(chalk.gray("终端渲染失败，已使用 xdg-open 打开二维码图片。"));
+            }
+            else {
+                console.log(chalk.yellow("终端渲染和 xdg-open 均失败，回退为 data URL："));
+                console.log(qr.qrimg);
+            }
         }
         const ok = await app.authService.waitQrLogin(qr.key);
         if (!ok)
@@ -192,6 +228,8 @@ program
 program
     .command("diff")
     .option("--refresh-cloud", "强制刷新云盘缓存")
+    .option("--all", "显示全量明细")
+    .option("--limit <n>", "每类最多显示条数（默认 100）", "100")
     .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
     .description("比对本地与云盘差异")
     .action(async (opts) => {
@@ -203,6 +241,54 @@ program
     console.log(chalk.cyan(`云盘独有: ${diff.cloudOnly.length}`));
     console.log(chalk.cyan(`精准匹配: ${diff.matchedExact.length}`));
     console.log(chalk.cyan(`模糊匹配: ${diff.matchedFuzzy.length}`));
+    const parsedLimit = Number(opts.limit);
+    const limit = opts.all ? Number.MAX_SAFE_INTEGER : Number.isNaN(parsedLimit) ? 100 : Math.max(parsedLimit, 0);
+    const take = (arr) => arr.slice(0, limit);
+    const localOnlyTable = new Table({
+        head: ["本地文件", "标题", "歌手", "时长(s)"],
+        colWidths: [40, 26, 20, 10]
+    });
+    for (const row of take(diff.localOnly)) {
+        localOnlyTable.push([row.fileName, row.title, row.artist, Math.round(row.durationMs / 1000)]);
+    }
+    console.log(chalk.yellow("\n=== 本地独有明细 ==="));
+    console.log(localOnlyTable.toString());
+    const cloudOnlyTable = new Table({
+        head: ["CloudID", "文件名", "歌曲名", "歌手"],
+        colWidths: [12, 30, 26, 20]
+    });
+    for (const row of take(diff.cloudOnly)) {
+        cloudOnlyTable.push([row.cloudId, row.fileName, row.simpleSongName, row.artist]);
+    }
+    console.log(chalk.yellow("\n=== 云盘独有明细 ==="));
+    console.log(cloudOnlyTable.toString());
+    const exactTable = new Table({
+        head: ["本地文件", "云盘文件", "歌曲名", "歌手"],
+        colWidths: [28, 28, 24, 20]
+    });
+    for (const row of take(diff.matchedExact)) {
+        exactTable.push([row.local.fileName, row.cloud.fileName, row.cloud.simpleSongName, row.cloud.artist]);
+    }
+    console.log(chalk.yellow("\n=== 精准匹配明细 ==="));
+    console.log(exactTable.toString());
+    const fuzzyTable = new Table({
+        head: ["本地文件", "云盘文件", "歌曲名", "歌手", "相似度"],
+        colWidths: [24, 24, 20, 16, 10]
+    });
+    for (const row of take(diff.matchedFuzzy)) {
+        fuzzyTable.push([
+            row.local.fileName,
+            row.cloud.fileName,
+            row.cloud.simpleSongName,
+            row.cloud.artist,
+            row.score.toFixed(3)
+        ]);
+    }
+    console.log(chalk.yellow("\n=== 模糊匹配明细 ==="));
+    console.log(fuzzyTable.toString());
+    if (!opts.all) {
+        console.log(chalk.gray(`\n已按每类最多 ${limit} 条展示；使用 --all 可看全量。`));
+    }
 });
 program
     .command("sync")

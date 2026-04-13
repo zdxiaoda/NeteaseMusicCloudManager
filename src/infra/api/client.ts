@@ -3,6 +3,9 @@ import PQueue from "p-queue";
 import { SessionStore } from "../config/session-store.js";
 
 type RequestParams = Record<string, string | number | boolean | undefined>;
+interface RequestOptions {
+  timeoutMs?: number;
+}
 
 export class ApiClient {
   private readonly http: AxiosInstance;
@@ -18,20 +21,26 @@ export class ApiClient {
     });
   }
 
-  async get<T>(endpoint: string, params: RequestParams = {}): Promise<T> {
+  async get<T>(endpoint: string, params: RequestParams = {}, options: RequestOptions = {}): Promise<T> {
     return this.queue.add(async () => {
       const cookie = this.sessionStore.getSession().cookie;
       const merged = { ...params, timestamp: Date.now(), cookie };
-      const { data } = await this.http.get<T>(endpoint, { params: merged });
+      const { data } = await this.http.get<T>(endpoint, {
+        params: merged,
+        timeout: options.timeoutMs
+      });
       return data;
     });
   }
 
-  async post<T>(endpoint: string, params: RequestParams = {}): Promise<T> {
+  async post<T>(endpoint: string, params: RequestParams = {}, options: RequestOptions = {}): Promise<T> {
     return this.queue.add(async () => {
       const cookie = this.sessionStore.getSession().cookie;
       const merged = { ...params, timestamp: Date.now(), cookie };
-      const { data } = await this.http.post<T>(endpoint, null, { params: merged });
+      const { data } = await this.http.post<T>(endpoint, null, {
+        params: merged,
+        timeout: options.timeoutMs
+      });
       return data;
     });
   }

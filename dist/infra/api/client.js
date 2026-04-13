@@ -13,19 +13,25 @@ export class ApiClient {
             timeout: 15000
         });
     }
-    async get(endpoint, params = {}) {
+    async get(endpoint, params = {}, options = {}) {
         return this.queue.add(async () => {
             const cookie = this.sessionStore.getSession().cookie;
             const merged = { ...params, timestamp: Date.now(), cookie };
-            const { data } = await this.http.get(endpoint, { params: merged });
+            const { data } = await this.http.get(endpoint, {
+                params: merged,
+                timeout: options.timeoutMs
+            });
             return data;
         });
     }
-    async post(endpoint, params = {}) {
+    async post(endpoint, params = {}, options = {}) {
         return this.queue.add(async () => {
             const cookie = this.sessionStore.getSession().cookie;
             const merged = { ...params, timestamp: Date.now(), cookie };
-            const { data } = await this.http.post(endpoint, null, { params: merged });
+            const { data } = await this.http.post(endpoint, null, {
+                params: merged,
+                timeout: options.timeoutMs
+            });
             return data;
         });
     }

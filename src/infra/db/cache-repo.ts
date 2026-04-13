@@ -65,7 +65,22 @@ export class CacheRepo {
   }
 
   getCloudSongs(): CloudSong[] {
-    return this.db.prepare("SELECT * FROM cloud_songs").all() as CloudSong[];
+    return this.db
+      .prepare(`
+        SELECT
+          cloud_id AS cloudId,
+          song_id AS songId,
+          file_name AS fileName,
+          simple_song_name AS simpleSongName,
+          artist,
+          album,
+          duration_ms AS durationMs,
+          add_time AS addTime,
+          file_size AS fileSize,
+          md5
+        FROM cloud_songs
+      `)
+      .all() as CloudSong[];
   }
 
   replaceLocalSongs(songs: LocalSong[]): void {
@@ -87,7 +102,20 @@ export class CacheRepo {
   }
 
   getLocalSongs(): LocalSong[] {
-    return this.db.prepare("SELECT * FROM local_songs").all() as LocalSong[];
+    return this.db
+      .prepare(`
+        SELECT
+          path,
+          file_name AS fileName,
+          title,
+          artist,
+          album,
+          duration_ms AS durationMs,
+          size,
+          md5
+        FROM local_songs
+      `)
+      .all() as LocalSong[];
   }
 
   setMeta(key: string, value: string): void {

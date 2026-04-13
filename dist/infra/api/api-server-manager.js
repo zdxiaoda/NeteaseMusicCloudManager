@@ -1,7 +1,6 @@
 import axios from "axios";
 import { spawn } from "node:child_process";
 let serverProcess;
-let lastServerError = "";
 function isLocalAddress(baseUrl) {
     try {
         const url = new URL(baseUrl);
@@ -56,32 +55,27 @@ export async function ensureApiServer(baseUrl) {
         { cmd: "npx", args: ["-y", "@neteasecloudmusicapienhanced/api"], readyTimeoutMs: 90000 }
     ];
     for (const item of commands) {
-        lastServerError = "";
         const proc = spawn(item.cmd, item.args, {
             env: { ...process.env, PORT: port, NCM_LOG_LEVEL: "error" },
-            stdio: ["ignore", "pipe", "pipe"]
+            stdio: "ignore",
+            detached: true
         });
+        proc.unref();
         serverProcess = proc;
-        proc.stdout?.on("data", (buf) => {
-            const text = buf.toString();
-            if (text.trim())
-                lastServerError = text.trim().slice(-500);
-        });
-        proc.stderr?.on("data", (buf) => {
-            const text = buf.toString();
-            if (text.trim())
-                lastServerError = text.trim().slice(-500);
-        });
         const ready = await waitReady(baseUrl, item.readyTimeoutMs);
         if (ready) {
             return;
         }
-        if (!proc.killed) {
-            proc.kill("SIGTERM");
+        if (!proc.killed && proc.pid) {
+            try {
+                process.kill(-proc.pid, "SIGTERM");
+            }
+            catch {
+                // ignore kill failures for already-exited process
+            }
         }
         serverProcess = undefined;
     }
-    const detail = lastServerError ? `；最近错误输出：${lastServerError}` : "";
-    throw new Error(`自动启动网易云 API 失败，请按文档手动启动: PORT=${port} npx @neteasecloudmusicapienhanced/api${detail}`);
+    throw new Error(`自动启动网易云 API 失败，请按文档手动启动: PORT=${port} npx @neteasecloudmusicapienhanced/api`);
 }
 //# sourceMappingURL=api-server-manager.js.map

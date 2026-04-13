@@ -59,7 +59,22 @@ export class CacheRepo {
         tx(songs);
     }
     getCloudSongs() {
-        return this.db.prepare("SELECT * FROM cloud_songs").all();
+        return this.db
+            .prepare(`
+        SELECT
+          cloud_id AS cloudId,
+          song_id AS songId,
+          file_name AS fileName,
+          simple_song_name AS simpleSongName,
+          artist,
+          album,
+          duration_ms AS durationMs,
+          add_time AS addTime,
+          file_size AS fileSize,
+          md5
+        FROM cloud_songs
+      `)
+            .all();
     }
     replaceLocalSongs(songs) {
         const clear = this.db.prepare("DELETE FROM local_songs");
@@ -79,7 +94,20 @@ export class CacheRepo {
         tx(songs);
     }
     getLocalSongs() {
-        return this.db.prepare("SELECT * FROM local_songs").all();
+        return this.db
+            .prepare(`
+        SELECT
+          path,
+          file_name AS fileName,
+          title,
+          artist,
+          album,
+          duration_ms AS durationMs,
+          size,
+          md5
+        FROM local_songs
+      `)
+            .all();
     }
     setMeta(key, value) {
         this.db
