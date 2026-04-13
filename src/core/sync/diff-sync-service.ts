@@ -5,6 +5,9 @@ import { CacheRepo } from "../../infra/db/cache-repo.js";
 import { DiffResult, LocalSong, CloudSong, BatchTaskSummary, BatchTaskFailure } from "../types.js";
 
 export class DiffSyncService {
+  private static readonly UPLOAD_MAX_ATTEMPTS = 3;
+  private static readonly UPLOAD_RETRY_DELAY_MS = 5000;
+
   constructor(
     private readonly cloudService: CloudService,
     private readonly cacheRepo: CacheRepo
@@ -176,7 +179,7 @@ export class DiffSyncService {
       await this.cloudService.deleteCloudSongs(deleteSongIds);
     }
     for (const local of diff.localOnly) {
-      await this.cloudService.uploadSong(local.path);
+      await this.uploadSongWithRetry(local);
     }
     await this.cloudService.getCloudSongs(true);
   }
@@ -236,7 +239,7 @@ export class DiffSyncService {
 
   collectQualityUpdateCandidates(
     diff: DiffResult,
-    thresholdMb = 5
+    thresholdMb = 3
   ): Array<{ local: LocalSong; cloud: CloudSong; sizeDiffBytes: number }> {
     const thresholdBytes = thresholdMb * 1024 * 1024;
     const candidates: Array<{ local: LocalSong; cloud: CloudSong; sizeDiffBytes: number }> = [];
@@ -254,7 +257,7 @@ export class DiffSyncService {
 
   async syncQualityUpdateWithReport(
     diff: DiffResult,
-    thresholdMb = 5,
+    thresholdMb = 3,
     onProgress?: (phase: string, summary: BatchTaskSummary, message?: string) => void
   ): Promise<BatchTaskSummary> {
     const candidates = this.collectQualityUpdateCandidates(diff, thresholdMb);
@@ -279,27 +282,20 @@ export class DiffSyncService {
       }
       try {
         await this.cloudService.deleteCloudSongs([songId]);
-        let lastUiAt = 0;
-        await this.cloudService.uploadSong(item.local.path, (p) => {
-          const now = Date.now();
-          if (now - lastUiAt < 300 && p.loaded < p.total) return;
-          lastUiAt = now;
+        await this.uploadSongWithRetry(item.local, (p) => {
           const percent = p.total > 0 ? Math.round((p.loaded / p.total) * 100) : 0;
-          onProgress?.(
-            "quality-update",
-            summary,
-            `${item.local.fileName} 上传中 ${percent}% @ ${this.formatSpeed(p.speedBps)}`
-          );
+          onProgress?.("quality-update", summary, `${item.local.fileName} 上传中 ${percent}% @ ${this.formatSpeed(p.speedBps)}`);
         });
         summary.success += 1;
         onProgress?.("quality-update", summary, `${item.local.fileName} 已完成音质更新`);
       } catch (error) {
+        const attempts = this.extractAttempts(error);
         summary.failed += 1;
         summary.failures.push({
           id: String(songId),
           name: item.local.fileName,
           reason: (error as Error).message,
-          attempts: 1
+          attempts
         });
         onProgress?.("quality-update", summary, `${item.local.fileName} 失败: ${(error as Error).message}`);
       }
@@ -501,27 +497,20 @@ export class DiffSyncService {
 
     for (const local of items) {
       try {
-        let lastUiAt = 0;
-        await this.cloudService.uploadSong(local.path, (p) => {
-          const now = Date.now();
-          if (now - lastUiAt < 300 && p.loaded < p.total) return;
-          lastUiAt = now;
+        await this.uploadSongWithRetry(local, (p) => {
           const percent = p.total > 0 ? Math.round((p.loaded / p.total) * 100) : 0;
-          onProgress?.(
-            "upload-local-only",
-            summary,
-            `${local.fileName} 上传中 ${percent}% @ ${this.formatSpeed(p.speedBps)}`
-          );
+          onProgress?.("upload-local-only", summary, `${local.fileName} 上传中 ${percent}% @ ${this.formatSpeed(p.speedBps)}`);
         });
         summary.success += 1;
         onProgress?.("upload-local-only", summary, `${local.fileName} 上传成功`);
       } catch (error) {
+        const attempts = this.extractAttempts(error);
         summary.failed += 1;
         summary.failures.push({
           id: local.path,
           name: local.fileName,
           reason: (error as Error).message,
-          attempts: 1
+          attempts
         });
         onProgress?.("upload-local-only", summary, `${local.fileName} 上传失败: ${(error as Error).message}`);
       }
@@ -532,6 +521,32 @@ export class DiffSyncService {
 
   private async sleep(ms: number): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async uploadSongWithRetry(
+    local: LocalSong,
+    onUploadProgress?: (progress: { loaded: number; total: number; speedBps: number }) => void
+  ): Promise<void> {
+    let attempts = 0;
+    let lastError: Error | undefined;
+    while (attempts < DiffSyncService.UPLOAD_MAX_ATTEMPTS) {
+      attempts += 1;
+      try {
+        await this.cloudService.uploadSong(local.path, onUploadProgress);
+        return;
+      } catch (error) {
+        lastError = error as Error;
+        if (attempts >= DiffSyncService.UPLOAD_MAX_ATTEMPTS) break;
+        await this.sleep(DiffSyncService.UPLOAD_RETRY_DELAY_MS);
+      }
+    }
+    const failed = new Error(lastError?.message || "上传失败");
+    (failed as Error & { attempts?: number }).attempts = attempts;
+    throw failed;
+  }
+
+  private extractAttempts(error: unknown): number {
+    return (error as { attempts?: number })?.attempts || DiffSyncService.UPLOAD_MAX_ATTEMPTS;
   }
 
   private formatSpeed(speedBps: number): string {

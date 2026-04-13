@@ -301,7 +301,7 @@ program
 program
   .command("sync")
   .option("--target <target>", "同步目标: cloud / local / quality-update", "cloud")
-  .option("--quality-threshold-mb <n>", "音质更新阈值（MB，默认 5）", "5")
+  .option("--quality-threshold-mb <n>", "音质更新阈值（MB，默认 3）", "3")
   .option("--delete-local-only", "同步本地端时删除本地独有歌曲")
   .option("--download-cloud-only", "同步本地端时下载云盘独有歌曲到本地")
   .option("--download-dir <dir>", "下载目录，默认当前目录")
@@ -375,7 +375,7 @@ program
         console.log(failureTable.toString());
       }
     } else if (opts.target === "quality-update") {
-      const thresholdMb = Math.max(0, Number(opts.qualityThresholdMb) || 5);
+      const thresholdMb = Math.max(0, Number(opts.qualityThresholdMb) || 3);
       const candidates = app.diffSyncService.collectQualityUpdateCandidates(diff, thresholdMb);
       const ok = await confirm({
         message: `将检查匹配歌曲并更新 ${candidates.length} 首（文件大小差异 > ${thresholdMb}MB），继续？`

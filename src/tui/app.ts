@@ -20,7 +20,7 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
         "8. Sync cloud side",
         "9. Sync local side (delete local-only)",
         "10. Sync local side (download cloud-only)",
-        "11. Sync quality update (>5MB)",
+        "11. Sync quality update (>3MB)",
         "q. Quit"
       ]
     : [
@@ -34,7 +34,7 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
         "8. 同步云盘端",
         "9. 同步本地端（删除本地独有）",
         "10. 同步本地端（下载云盘独有）",
-        "11. 音质 update 同步（>5MB）",
+        "11. 音质 update 同步（>3MB）",
         "q. 退出"
       ];
 
@@ -306,7 +306,7 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
         const local = app.cacheRepo.getLocalSongs();
         const cloud = await app.cloudService.getCloudSongs(false);
         const diff = app.diffSyncService.buildDiff(local, cloud);
-        const thresholdMb = 5;
+        const thresholdMb = 3;
         const candidates = app.diffSyncService.collectQualityUpdateCandidates(diff, thresholdMb);
         const ok = await askYesNo(
           preferAscii
