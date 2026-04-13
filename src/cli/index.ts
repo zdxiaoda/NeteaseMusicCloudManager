@@ -7,20 +7,27 @@ import chalk from "chalk";
 import ora from "ora";
 import { createApp } from "../bootstrap.js";
 import { startTui } from "../tui/app.js";
+import { ensureApiServer } from "../infra/api/api-server-manager.js";
 
 const program = new Command();
 const defaultBaseUrl = process.env.NCM_API_BASE_URL || "http://localhost:3000";
 
 program.name("ncm-cloud").description("网易云音乐云盘歌曲管理 CLI").version("0.1.0");
 
-const withApp = (baseUrl?: string) => createApp(baseUrl || defaultBaseUrl);
+const withAppReady = async (baseUrl?: string) => {
+  const url = baseUrl || defaultBaseUrl;
+  if (process.env.NCM_AUTO_START_API !== "0") {
+    await ensureApiServer(url);
+  }
+  return createApp(url);
+};
 
 program
   .command("login")
   .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
   .description("账号登录（手机号/邮箱/二维码）")
   .action(async (opts) => {
-    const app = withApp(opts.baseUrl);
+    const app = await withAppReady(opts.baseUrl);
     const already = await app.authService.ensureLogin();
     if (already) {
       console.log(chalk.green("当前已登录，无需重复登录。"));
@@ -59,7 +66,7 @@ program
   .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
   .description("检查登录状态")
   .action(async (opts) => {
-    const app = withApp(opts.baseUrl);
+    const app = await withAppReady(opts.baseUrl);
     const ok = await app.authService.ensureLogin();
     console.log(ok ? chalk.green("登录状态有效") : chalk.yellow("未登录或登录已过期"));
   });
@@ -70,7 +77,7 @@ program
   .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
   .description("列出云盘歌曲")
   .action(async (opts) => {
-    const app = withApp(opts.baseUrl);
+    const app = await withAppReady(opts.baseUrl);
     const spinner = ora("加载云盘歌曲...").start();
     const songs = await app.cloudService.getCloudSongs(Boolean(opts.refresh));
     spinner.succeed(`共 ${songs.length} 首`);
@@ -93,7 +100,7 @@ program
   .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
   .description("删除云盘歌曲")
   .action(async (ids: string[], opts) => {
-    const app = withApp(opts.baseUrl);
+    const app = await withAppReady(opts.baseUrl);
     const values = ids.map((x) => Number(x)).filter((x) => !Number.isNaN(x));
     await app.cloudService.deleteCloudSongs(values);
     console.log(chalk.green(`已请求删除 ${values.length} 首云盘歌曲`));
@@ -105,7 +112,7 @@ program
   .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
   .description("上传歌曲到云盘")
   .action(async (file: string, opts) => {
-    const app = withApp(opts.baseUrl);
+    const app = await withAppReady(opts.baseUrl);
     await app.cloudService.uploadSong(file);
     console.log(chalk.green(`上传完成: ${file}`));
   });
@@ -117,7 +124,7 @@ program
   .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
   .description("下载云盘歌曲到本地")
   .action(async (cloudId: string, targetDir: string, opts) => {
-    const app = withApp(opts.baseUrl);
+    const app = await withAppReady(opts.baseUrl);
     const songs = await app.cloudService.getCloudSongs(false);
     const target = songs.find((x) => x.cloudId === Number(cloudId));
     if (!target) throw new Error(`未找到 cloudId=${cloudId} 的歌曲`);
@@ -132,7 +139,7 @@ program
   .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
   .description("执行云盘歌曲匹配")
   .action(async (cloudId: string, songId: string, opts) => {
-    const app = withApp(opts.baseUrl);
+    const app = await withAppReady(opts.baseUrl);
     await app.cloudService.matchSong(Number(cloudId), Number(songId));
     console.log(chalk.green("匹配请求已提交"));
   });
@@ -143,7 +150,7 @@ program
   .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
   .description("扫描本地音乐并建立缓存")
   .action(async (folder: string, opts) => {
-    const app = withApp(opts.baseUrl);
+    const app = await withAppReady(opts.baseUrl);
     const spinner = ora("扫描本地音乐...").start();
     const songs = await app.localScanner.scan(folder);
     app.sessionStore.setLocalScanPath(folder);
@@ -156,7 +163,7 @@ program
   .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
   .description("比对本地与云盘差异")
   .action(async (opts) => {
-    const app = withApp(opts.baseUrl);
+    const app = await withAppReady(opts.baseUrl);
     const local = app.cacheRepo.getLocalSongs();
     const cloud = await app.cloudService.getCloudSongs(Boolean(opts.refreshCloud));
     const diff = app.diffSyncService.buildDiff(local, cloud);
@@ -175,7 +182,7 @@ program
   .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
   .description("执行双向同步")
   .action(async (opts) => {
-    const app = withApp(opts.baseUrl);
+    const app = await withAppReady(opts.baseUrl);
     const local = app.cacheRepo.getLocalSongs();
     const cloud = await app.cloudService.getCloudSongs(false);
     const diff = app.diffSyncService.buildDiff(local, cloud);
@@ -250,7 +257,11 @@ program
   .option("--ascii", "ASCII 降级模式（终端乱码时使用）")
   .description("启动全屏 TUI")
   .action(async (opts) => {
-    await startTui(opts.baseUrl || defaultBaseUrl, { ascii: Boolean(opts.ascii) });
+    const baseUrl = opts.baseUrl || defaultBaseUrl;
+    if (process.env.NCM_AUTO_START_API !== "0") {
+      await ensureApiServer(baseUrl);
+    }
+    await startTui(baseUrl, { ascii: Boolean(opts.ascii) });
   });
 
 program.parseAsync(process.argv).catch((error) => {
