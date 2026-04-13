@@ -47,4 +47,16 @@ export interface SessionState {
     lastLoginAt?: number;
     loginMethod?: LoginMethod;
 }
+export interface BatchTaskFailure {
+    id: string;
+    name: string;
+    reason: string;
+    attempts: number;
+}
+export interface BatchTaskSummary {
+    total: number;
+    success: number;
+    failed: number;
+    failures: BatchTaskFailure[];
+}
 //# sourceMappingURL=types.d.ts.map

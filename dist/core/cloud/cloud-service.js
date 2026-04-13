@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import axios from "axios";
 export class CloudService {
     apiClient;
     cacheRepo;
@@ -42,6 +43,34 @@ export class CloudService {
     async matchSong(cloudId, songId) {
         await this.apiClient.get("/cloud/match", { sid: cloudId, asid: songId });
     }
+    async getSongDownloadUrl(songId) {
+        const response = await this.apiClient.get("/song/url/v1", {
+            id: songId,
+            level: "exhigh"
+        });
+        const url = response.data?.[0]?.url;
+        if (!url) {
+            throw new Error(`未获取到 songId=${songId} 的下载地址`);
+        }
+        return url;
+    }
+    async downloadCloudSong(song, targetDir) {
+        if (!song.songId) {
+            throw new Error(`cloudId=${song.cloudId} 缺少 songId，无法下载`);
+        }
+        fs.mkdirSync(targetDir, { recursive: true });
+        const url = await this.getSongDownloadUrl(song.songId);
+        const safeName = this.sanitizeName(song.fileName || `${song.simpleSongName}.mp3`);
+        const outputPath = path.join(targetDir, safeName);
+        const response = await axios.get(url, { responseType: "stream", timeout: 60000 });
+        await new Promise((resolve, reject) => {
+            const writer = fs.createWriteStream(outputPath);
+            response.data.pipe(writer);
+            writer.on("finish", resolve);
+            writer.on("error", reject);
+        });
+        return outputPath;
+    }
     async fetchAllCloudSongs() {
         const all = [];
         let offset = 0;
@@ -66,6 +95,9 @@ export class CloudService {
             offset += limit;
         }
         return all;
+    }
+    sanitizeName(name) {
+        return name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_");
     }
 }
 //# sourceMappingURL=cloud-service.js.map

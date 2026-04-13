@@ -11,6 +11,9 @@ export declare class CloudService {
     deleteCloudSongs(cloudIds: number[]): Promise<void>;
     uploadSong(filePath: string): Promise<void>;
     matchSong(cloudId: number, songId: number): Promise<void>;
+    getSongDownloadUrl(songId: number): Promise<string>;
+    downloadCloudSong(song: CloudSong, targetDir: string): Promise<string>;
     private fetchAllCloudSongs;
+    private sanitizeName;
 }
 //# sourceMappingURL=cloud-service.d.ts.map

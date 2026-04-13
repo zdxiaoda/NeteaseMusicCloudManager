@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import Table from "cli-table3";
+import cliProgress from "cli-progress";
 import { input, password, select, confirm } from "@inquirer/prompts";
 import chalk from "chalk";
 import ora from "ora";
@@ -102,6 +103,21 @@ program
     console.log(chalk.green(`上传完成: ${file}`));
 });
 program
+    .command("cloud:download")
+    .argument("<cloudId>", "云盘歌曲 cloudId")
+    .argument("<targetDir>", "下载目标目录")
+    .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
+    .description("下载云盘歌曲到本地")
+    .action(async (cloudId, targetDir, opts) => {
+    const app = withApp(opts.baseUrl);
+    const songs = await app.cloudService.getCloudSongs(false);
+    const target = songs.find((x) => x.cloudId === Number(cloudId));
+    if (!target)
+        throw new Error(`未找到 cloudId=${cloudId} 的歌曲`);
+    const output = await app.cloudService.downloadCloudSong(target, targetDir);
+    console.log(chalk.green(`下载完成: ${output}`));
+});
+program
     .command("cloud:match")
     .argument("<cloudId>", "云盘歌曲 cloudId")
     .argument("<songId>", "目标歌曲 songId")
@@ -143,6 +159,8 @@ program
     .command("sync")
     .option("--target <target>", "同步目标: cloud 或 local", "cloud")
     .option("--delete-local-only", "同步本地端时删除本地独有歌曲")
+    .option("--download-cloud-only", "同步本地端时下载云盘独有歌曲到本地")
+    .option("--download-dir <dir>", "下载目录，默认当前目录")
     .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
     .description("执行双向同步")
     .action(async (opts) => {
@@ -150,25 +168,72 @@ program
     const local = app.cacheRepo.getLocalSongs();
     const cloud = await app.cloudService.getCloudSongs(false);
     const diff = app.diffSyncService.buildDiff(local, cloud);
+    const bars = new cliProgress.MultiBar({
+        format: "{phase} |{bar}| {value}/{total} | {status}",
+        hideCursor: true,
+        clearOnComplete: false
+    }, cliProgress.Presets.shades_classic);
+    const phaseBars = new Map();
+    const updateBar = (phase, total, value, status) => {
+        if (!phaseBars.has(phase)) {
+            phaseBars.set(phase, bars.create(Math.max(total, 1), 0, { phase, status: "starting" }));
+        }
+        const bar = phaseBars.get(phase);
+        bar.setTotal(Math.max(total, 1));
+        bar.update(Math.min(value, Math.max(total, 1)), { status: status.slice(0, 60) });
+    };
     if (opts.target === "cloud") {
         const ok = await confirm({ message: `将删除云盘独有 ${diff.cloudOnly.length} 首并上传本地独有 ${diff.localOnly.length} 首，继续？` });
         if (!ok)
             return;
-        await app.diffSyncService.syncCloudSide(diff);
-        console.log(chalk.green("云盘端同步完成"));
+        const summary = await app.diffSyncService.syncCloudSideWithReport(diff, (phase, s, message) => {
+            updateBar(phase, s.total, s.success + s.failed, message || "");
+        });
+        bars.stop();
+        console.log(chalk.green(`云盘端同步完成：成功 ${summary.success}，失败 ${summary.failed}`));
+        if (summary.failures.length) {
+            const failureTable = new Table({ head: ["任务", "名称", "原因", "重试次数"] });
+            for (const f of summary.failures) {
+                failureTable.push([f.id, f.name, f.reason, f.attempts]);
+            }
+            console.log(chalk.red("失败重试面板："));
+            console.log(failureTable.toString());
+        }
     }
     else {
-        const result = app.diffSyncService.syncLocalSide(diff, Boolean(opts.deleteLocalOnly));
+        const result = await app.diffSyncService.syncLocalSide(diff, {
+            deleteLocalOnly: Boolean(opts.deleteLocalOnly),
+            downloadCloudOnly: Boolean(opts.downloadCloudOnly),
+            downloadDir: opts.downloadDir
+        }, (phase, s, message) => {
+            updateBar(phase, s.total, s.success + s.failed, message || "");
+        });
+        bars.stop();
         console.log(chalk.green(`本地端同步完成，删除本地独有 ${result.deletedLocal} 首`));
-        console.log(chalk.yellow(`云盘独有 ${result.cloudOnlyPending} 首暂存待下载队列（可后续扩展下载流程）`));
+        if (result.downloadSummary) {
+            console.log(chalk.green(`云盘独有下载：成功 ${result.downloadSummary.success}，失败 ${result.downloadSummary.failed}`));
+        }
+        else {
+            console.log(chalk.yellow(`云盘独有 ${result.cloudOnlyPending} 首暂存待下载队列`));
+        }
+        const failures = result.downloadSummary?.failures || [];
+        if (failures.length) {
+            const failureTable = new Table({ head: ["任务", "名称", "原因", "重试次数"] });
+            for (const f of failures) {
+                failureTable.push([f.id, f.name, f.reason, f.attempts]);
+            }
+            console.log(chalk.red("失败重试面板："));
+            console.log(failureTable.toString());
+        }
     }
 });
 program
     .command("tui")
     .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
+    .option("--ascii", "ASCII 降级模式（终端乱码时使用）")
     .description("启动全屏 TUI")
     .action(async (opts) => {
-    await startTui(opts.baseUrl || defaultBaseUrl);
+    await startTui(opts.baseUrl || defaultBaseUrl, { ascii: Boolean(opts.ascii) });
 });
 program.parseAsync(process.argv).catch((error) => {
     console.error(chalk.red(`执行失败: ${error.message}`));
