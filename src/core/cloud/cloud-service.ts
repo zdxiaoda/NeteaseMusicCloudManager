@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { openAsBlob } from "node:fs";
+import crypto from "node:crypto";
 import axios from "axios";
+import { parseFile } from "music-metadata";
 import { ApiClient } from "../../infra/api/client.js";
 import { CacheRepo } from "../../infra/db/cache-repo.js";
 import { SessionStore } from "../../infra/config/session-store.js";
@@ -42,6 +43,30 @@ interface SongUrlResponse {
   data: Array<{ url?: string }>;
 }
 
+interface UploadTokenResponse {
+  code: number;
+  msg?: string;
+  data?: {
+    needUpload: boolean;
+    songId: string;
+    uploadToken: string;
+    uploadUrl: string;
+    resourceId: string;
+    md5?: string;
+  };
+}
+
+interface UploadCompleteResponse {
+  code: number;
+  msg?: string;
+}
+
+interface UploadProgress {
+  loaded: number;
+  total: number;
+  speedBps: number;
+}
+
 export class CloudService {
   constructor(
     private readonly apiClient: ApiClient,
@@ -66,12 +91,73 @@ export class CloudService {
     }
   }
 
-  async uploadSong(filePath: string): Promise<void> {
+  async uploadSong(filePath: string, onProgress?: (progress: UploadProgress) => void): Promise<void> {
     const fileName = path.basename(filePath);
-    const fileBlob = await openAsBlob(filePath);
-    const form = new FormData();
-    form.append("songFile", fileBlob, fileName);
-    await this.apiClient.postMultipart("/cloud", form);
+    const fallbackSongName = path.parse(fileName).name;
+    const tagMeta = await this.readMediaMeta(filePath);
+    const stat = fs.statSync(filePath);
+    const md5 = await this.hashMd5(filePath);
+    const tokenRes = await this.apiClient.postBody<UploadTokenResponse>("/cloud/upload/token", {
+      md5,
+      fileSize: stat.size,
+      filename: fileName
+    });
+    if (tokenRes.code !== 200 || !tokenRes.data) {
+      throw new Error(tokenRes.msg || "获取云盘上传凭证失败");
+    }
+    const tokenData = tokenRes.data;
+
+    if (tokenData.needUpload) {
+      let lastLoaded = 0;
+      let lastAt = Date.now();
+      let loaded = 0;
+      const uploadStream = fs.createReadStream(filePath);
+      uploadStream.on("data", (chunk: Buffer) => {
+        loaded += chunk.length;
+        const now = Date.now();
+        const elapsedMs = Math.max(1, now - lastAt);
+        const speedBps = ((loaded - lastLoaded) * 1000) / elapsedMs;
+        lastLoaded = loaded;
+        lastAt = now;
+        onProgress?.({
+          loaded,
+          total: stat.size,
+          speedBps: Math.max(0, speedBps)
+        });
+      });
+      await axios({
+        method: "post",
+        url: tokenData.uploadUrl,
+        headers: {
+          "x-nos-token": tokenData.uploadToken,
+          "Content-MD5": md5,
+          "Content-Type": "audio/mpeg",
+          "Content-Length": String(stat.size)
+        },
+        data: uploadStream,
+        maxContentLength: Number.POSITIVE_INFINITY,
+        maxBodyLength: Number.POSITIVE_INFINITY,
+        timeout: 10 * 60 * 1000
+      });
+      onProgress?.({
+        loaded: stat.size,
+        total: stat.size,
+        speedBps: 0
+      });
+    }
+
+    const completeRes = await this.apiClient.postBody<UploadCompleteResponse>("/cloud/upload/complete", {
+      songId: tokenData.songId,
+      resourceId: tokenData.resourceId,
+      md5: tokenData.md5 || md5,
+      filename: fileName,
+      song: tagMeta.song || fallbackSongName,
+      artist: tagMeta.artist,
+      album: tagMeta.album
+    });
+    if (completeRes.code !== 200) {
+      throw new Error(completeRes.msg || "云盘导入失败");
+    }
   }
 
   async matchSong(cloudId: number, songId: number): Promise<void> {
@@ -179,5 +265,31 @@ export class CloudService {
       result.push(values.slice(i, i + size));
     }
     return result;
+  }
+
+  private hashMd5(filePath: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const hash = crypto.createHash("md5");
+      const stream = fs.createReadStream(filePath);
+      stream.on("data", (chunk) => hash.update(chunk));
+      stream.on("end", () => resolve(hash.digest("hex")));
+      stream.on("error", reject);
+    });
+  }
+
+  private async readMediaMeta(filePath: string): Promise<{ song?: string; artist?: string; album?: string }> {
+    try {
+      const metadata = await parseFile(filePath);
+      const song = metadata.common.title?.trim();
+      const artist = metadata.common.artist?.trim();
+      const album = metadata.common.album?.trim();
+      return {
+        song: song || undefined,
+        artist: artist || undefined,
+        album: album || undefined
+      };
+    } catch {
+      return {};
+    }
   }
 }

@@ -428,7 +428,18 @@ export class DiffSyncService {
 
     for (const local of items) {
       try {
-        await this.cloudService.uploadSong(local.path);
+        let lastUiAt = 0;
+        await this.cloudService.uploadSong(local.path, (p) => {
+          const now = Date.now();
+          if (now - lastUiAt < 300 && p.loaded < p.total) return;
+          lastUiAt = now;
+          const percent = p.total > 0 ? Math.round((p.loaded / p.total) * 100) : 0;
+          onProgress?.(
+            "upload-local-only",
+            summary,
+            `${local.fileName} 上传中 ${percent}% @ ${this.formatSpeed(p.speedBps)}`
+          );
+        });
       } catch (error) {
         attemptErrors.set(local.md5, (error as Error).message);
       }
@@ -456,5 +467,11 @@ export class DiffSyncService {
 
   private async sleep(ms: number): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private formatSpeed(speedBps: number): string {
+    if (speedBps >= 1024 * 1024) return `${(speedBps / (1024 * 1024)).toFixed(2)} MB/s`;
+    if (speedBps >= 1024) return `${(speedBps / 1024).toFixed(1)} KB/s`;
+    return `${Math.round(speedBps)} B/s`;
   }
 }

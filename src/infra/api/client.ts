@@ -3,6 +3,7 @@ import PQueue from "p-queue";
 import { SessionStore } from "../config/session-store.js";
 
 type RequestParams = Record<string, string | number | boolean | undefined>;
+type RequestBody = Record<string, string | number | boolean | undefined | null>;
 interface RequestOptions {
   timeoutMs?: number;
 }
@@ -49,6 +50,22 @@ export class ApiClient {
         return data;
       } catch (error) {
         throw this.decorateRequestError("POST", endpoint, error);
+      }
+    });
+  }
+
+  async postBody<T>(endpoint: string, body: RequestBody = {}, options: RequestOptions = {}): Promise<T> {
+    return this.queue.add(async () => {
+      const cookie = this.sessionStore.getSession().cookie;
+      const payload = { ...body, cookie };
+      try {
+        const { data } = await this.http.post<T>(endpoint, payload, {
+          params: { timestamp: Date.now() },
+          timeout: options.timeoutMs
+        });
+        return data;
+      } catch (error) {
+        throw this.decorateRequestError("POST(body)", endpoint, error);
       }
     });
   }
