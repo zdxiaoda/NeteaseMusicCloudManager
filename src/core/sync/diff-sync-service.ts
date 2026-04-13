@@ -229,7 +229,7 @@ export class DiffSyncService {
       onProgress?.("delete-cloud-only", deleted, `删除完成，成功 ${deleted.success}，失败 ${deleted.failed}`);
     }
 
-    const uploaded = await this.uploadLocalOnlyOnceWithVerification(diff.localOnly, onProgress);
+    const uploaded = await this.uploadLocalOnlyOnce(diff.localOnly, onProgress);
     await this.cloudService.getCloudSongs(true);
     return this.mergeSummary(deleted, uploaded);
   }
@@ -488,7 +488,7 @@ export class DiffSyncService {
     return "title" in item ? item.path : String(item.cloudId);
   }
 
-  private async uploadLocalOnlyOnceWithVerification(
+  private async uploadLocalOnlyOnce(
     items: LocalSong[],
     onProgress?: (phase: string, summary: BatchTaskSummary, message?: string) => void
   ): Promise<BatchTaskSummary> {
@@ -498,7 +498,6 @@ export class DiffSyncService {
       failed: 0,
       failures: []
     };
-    const attemptErrors = new Map<string, string>();
 
     for (const local of items) {
       try {
@@ -514,26 +513,18 @@ export class DiffSyncService {
             `${local.fileName} 上传中 ${percent}% @ ${this.formatSpeed(p.speedBps)}`
           );
         });
-      } catch (error) {
-        attemptErrors.set(local.md5, (error as Error).message);
-      }
-      onProgress?.("upload-local-only", summary, `${local.fileName} 已提交上传`);
-    }
-
-    const cloudAfterUpload = await this.cloudService.getCloudSongs(true);
-    const uploadedMd5 = new Set(cloudAfterUpload.map((x) => x.md5).filter((md5): md5 is string => Boolean(md5)));
-    for (const local of items) {
-      if (uploadedMd5.has(local.md5)) {
         summary.success += 1;
-        continue;
+        onProgress?.("upload-local-only", summary, `${local.fileName} 上传成功`);
+      } catch (error) {
+        summary.failed += 1;
+        summary.failures.push({
+          id: local.path,
+          name: local.fileName,
+          reason: (error as Error).message,
+          attempts: 1
+        });
+        onProgress?.("upload-local-only", summary, `${local.fileName} 上传失败: ${(error as Error).message}`);
       }
-      summary.failed += 1;
-      summary.failures.push({
-        id: local.path,
-        name: local.fileName,
-        reason: attemptErrors.get(local.md5) || "上传后云端复核未找到该文件",
-        attempts: 1
-      });
     }
     onProgress?.("upload-local-only", summary, `上传完成，成功 ${summary.success}，失败 ${summary.failed}`);
     return summary;
