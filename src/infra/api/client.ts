@@ -25,11 +25,15 @@ export class ApiClient {
     return this.queue.add(async () => {
       const cookie = this.sessionStore.getSession().cookie;
       const merged = { ...params, timestamp: Date.now(), cookie };
-      const { data } = await this.http.get<T>(endpoint, {
-        params: merged,
-        timeout: options.timeoutMs
-      });
-      return data;
+      try {
+        const { data } = await this.http.get<T>(endpoint, {
+          params: merged,
+          timeout: options.timeoutMs
+        });
+        return data;
+      } catch (error) {
+        throw this.decorateRequestError("GET", endpoint, error);
+      }
     });
   }
 
@@ -37,11 +41,44 @@ export class ApiClient {
     return this.queue.add(async () => {
       const cookie = this.sessionStore.getSession().cookie;
       const merged = { ...params, timestamp: Date.now(), cookie };
-      const { data } = await this.http.post<T>(endpoint, null, {
-        params: merged,
-        timeout: options.timeoutMs
-      });
-      return data;
+      try {
+        const { data } = await this.http.post<T>(endpoint, null, {
+          params: merged,
+          timeout: options.timeoutMs
+        });
+        return data;
+      } catch (error) {
+        throw this.decorateRequestError("POST", endpoint, error);
+      }
     });
+  }
+
+  async postMultipart<T>(
+    endpoint: string,
+    formData: FormData,
+    params: RequestParams = {},
+    options: RequestOptions = {}
+  ): Promise<T> {
+    return this.queue.add(async () => {
+      const cookie = this.sessionStore.getSession().cookie;
+      const merged = { ...params, timestamp: Date.now(), cookie };
+      try {
+        const { data } = await this.http.post<T>(endpoint, formData, {
+          params: merged,
+          timeout: options.timeoutMs
+        });
+        return data;
+      } catch (error) {
+        throw this.decorateRequestError("POST(multipart)", endpoint, error);
+      }
+    });
+  }
+
+  private decorateRequestError(method: string, endpoint: string, error: unknown): Error {
+    const e = error as Error & { response?: { status?: number; statusText?: string } };
+    const status = e.response?.status;
+    const statusText = e.response?.statusText;
+    const statusPart = status ? `HTTP ${status}${statusText ? ` ${statusText}` : ""}` : "network error";
+    return new Error(`${method} ${endpoint} failed: ${statusPart}`);
   }
 }

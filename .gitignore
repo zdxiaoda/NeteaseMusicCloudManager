@@ -89,3 +89,5 @@ out/
 
 #Vscode
 .vscode/
+
+dist/

@@ -42,6 +42,7 @@ export interface DiffResult {
 
 export interface SessionState {
   cookie?: string;
+  userId?: number;
   lastLoginAt?: number;
   loginMethod?: LoginMethod;
 }

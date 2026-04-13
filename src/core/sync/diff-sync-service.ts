@@ -172,7 +172,8 @@ export class DiffSyncService {
 
   async syncCloudSide(diff: DiffResult): Promise<void> {
     if (diff.cloudOnly.length) {
-      await this.cloudService.deleteCloudSongs(diff.cloudOnly.map((x) => x.cloudId));
+      const deleteSongIds = diff.cloudOnly.map((x) => x.songId).filter((id): id is number => Boolean(id));
+      await this.cloudService.deleteCloudSongs(deleteSongIds);
     }
     for (const local of diff.localOnly) {
       await this.cloudService.uploadSong(local.path);
@@ -184,13 +185,50 @@ export class DiffSyncService {
     diff: DiffResult,
     onProgress?: (phase: string, summary: BatchTaskSummary, message?: string) => void
   ): Promise<BatchTaskSummary> {
-    const deleted = await this.runBatch(
-      "delete-cloud-only",
-      diff.cloudOnly,
-      async (cloud) => this.cloudService.deleteCloudSongs([cloud.cloudId]),
-      2,
-      onProgress
-    );
+    const deleted: BatchTaskSummary = {
+      total: 0,
+      success: 0,
+      failed: 0,
+      failures: []
+    };
+    if (diff.cloudOnly.length) {
+      for (const cloud of diff.cloudOnly) {
+        deleted.total += 1;
+        if (cloud.songId) continue;
+        deleted.failed += 1;
+        deleted.failures.push({
+          id: String(cloud.cloudId),
+          name: cloud.fileName,
+          reason: "缺少 songId，无法调用 /user/cloud/del",
+          attempts: 0
+        });
+      }
+      const deleteIds = diff.cloudOnly.map((x) => x.songId).filter((id): id is number => Boolean(id));
+      if (deleteIds.length) {
+        await this.cloudService.deleteCloudSongs(deleteIds);
+        const afterDelete = await this.cloudService.getCloudSongs(true);
+        const stillExists = new Set(
+          afterDelete
+            .map((x) => x.songId)
+            .filter((id): id is number => Boolean(id))
+            .filter((id) => deleteIds.includes(id))
+        );
+        for (const cloud of diff.cloudOnly) {
+          const songId = cloud.songId;
+          if (!songId || !stillExists.has(songId)) continue;
+          deleted.failures.push({
+            id: String(songId),
+            name: cloud.fileName,
+            reason: "删除后复核仍存在",
+            attempts: 1
+          });
+        }
+      }
+      deleted.failed = deleted.failures.length;
+      deleted.success = deleted.total - deleted.failed;
+      onProgress?.("delete-cloud-only", deleted, `删除完成，成功 ${deleted.success}，失败 ${deleted.failed}`);
+    }
+
     const uploaded = await this.runBatch(
       "upload-local-only",
       diff.localOnly,

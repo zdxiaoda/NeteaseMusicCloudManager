@@ -241,8 +241,15 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
         if (!ok) {
           output.log(preferAscii ? "Cancelled" : "已取消");
         } else {
-          const summary = await app.diffSyncService.syncCloudSideWithReport(diff, (_phase, _s, msg) => {
+          const summary = await app.diffSyncService.syncCloudSideWithReport(diff, (phase, s, msg) => {
             if (msg) output.log(msg);
+            const phaseLabel = preferAscii ? phase : `阶段 ${phase}`;
+            output.log(
+              preferAscii
+                ? `[${phaseLabel}] ${s.success + s.failed}/${s.total} (ok ${s.success}, fail ${s.failed})`
+                : `[${phaseLabel}] ${s.success + s.failed}/${s.total}（成功 ${s.success}，失败 ${s.failed}）`
+            );
+            screen.render();
           });
           output.log(
             preferAscii
