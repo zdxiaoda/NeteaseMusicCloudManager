@@ -229,13 +229,7 @@ export class DiffSyncService {
       onProgress?.("delete-cloud-only", deleted, `删除完成，成功 ${deleted.success}，失败 ${deleted.failed}`);
     }
 
-    const uploaded = await this.runBatch(
-      "upload-local-only",
-      diff.localOnly,
-      async (local) => this.cloudService.uploadSong(local.path),
-      2,
-      onProgress
-    );
+    const uploaded = await this.uploadLocalOnlyOnceWithVerification(diff.localOnly, onProgress);
     await this.cloudService.getCloudSongs(true);
     return this.mergeSummary(deleted, uploaded);
   }
@@ -418,6 +412,46 @@ export class DiffSyncService {
 
   private itemId(item: LocalSong | CloudSong): string {
     return "title" in item ? item.path : String(item.cloudId);
+  }
+
+  private async uploadLocalOnlyOnceWithVerification(
+    items: LocalSong[],
+    onProgress?: (phase: string, summary: BatchTaskSummary, message?: string) => void
+  ): Promise<BatchTaskSummary> {
+    const summary: BatchTaskSummary = {
+      total: items.length,
+      success: 0,
+      failed: 0,
+      failures: []
+    };
+    const attemptErrors = new Map<string, string>();
+
+    for (const local of items) {
+      try {
+        await this.cloudService.uploadSong(local.path);
+      } catch (error) {
+        attemptErrors.set(local.md5, (error as Error).message);
+      }
+      onProgress?.("upload-local-only", summary, `${local.fileName} 已提交上传`);
+    }
+
+    const cloudAfterUpload = await this.cloudService.getCloudSongs(true);
+    const uploadedMd5 = new Set(cloudAfterUpload.map((x) => x.md5).filter((md5): md5 is string => Boolean(md5)));
+    for (const local of items) {
+      if (uploadedMd5.has(local.md5)) {
+        summary.success += 1;
+        continue;
+      }
+      summary.failed += 1;
+      summary.failures.push({
+        id: local.path,
+        name: local.fileName,
+        reason: attemptErrors.get(local.md5) || "上传后云端复核未找到该文件",
+        attempts: 1
+      });
+    }
+    onProgress?.("upload-local-only", summary, `上传完成，成功 ${summary.success}，失败 ${summary.failed}`);
+    return summary;
   }
 
   private async sleep(ms: number): Promise<void> {

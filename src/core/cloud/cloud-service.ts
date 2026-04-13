@@ -50,14 +50,8 @@ export class CloudService {
   ) {}
 
   async getCloudSongs(forceRefresh = false): Promise<CloudSong[]> {
+    void forceRefresh;
     const now = Date.now();
-    const lastUpdate = this.sessionStore.getCloudCacheUpdatedAt();
-    const stale = now - lastUpdate > 24 * 60 * 60 * 1000;
-    if (!forceRefresh && !stale) {
-      const cached = this.cacheRepo.getCloudSongs();
-      if (cached.length > 0) return cached;
-    }
-
     const songs = await this.fetchAllCloudSongs();
     this.cacheRepo.replaceCloudSongs(songs);
     this.sessionStore.setCloudCacheUpdatedAt(now);
