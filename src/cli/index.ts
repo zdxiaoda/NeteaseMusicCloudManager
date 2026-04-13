@@ -300,7 +300,8 @@ program
 
 program
   .command("sync")
-  .option("--target <target>", "同步目标: cloud 或 local", "cloud")
+  .option("--target <target>", "同步目标: cloud / local / quality-update", "cloud")
+  .option("--quality-threshold-mb <n>", "音质更新阈值（MB，默认 5）", "5")
   .option("--delete-local-only", "同步本地端时删除本地独有歌曲")
   .option("--download-cloud-only", "同步本地端时下载云盘独有歌曲到本地")
   .option("--download-dir <dir>", "下载目录，默认当前目录")
@@ -345,7 +346,7 @@ program
         console.log(chalk.red("失败重试面板："));
         console.log(failureTable.toString());
       }
-    } else {
+    } else if (opts.target === "local") {
       const result = await app.diffSyncService.syncLocalSide(
         diff,
         {
@@ -373,6 +374,29 @@ program
         console.log(chalk.red("失败重试面板："));
         console.log(failureTable.toString());
       }
+    } else if (opts.target === "quality-update") {
+      const thresholdMb = Math.max(0, Number(opts.qualityThresholdMb) || 5);
+      const candidates = app.diffSyncService.collectQualityUpdateCandidates(diff, thresholdMb);
+      const ok = await confirm({
+        message: `将检查匹配歌曲并更新 ${candidates.length} 首（文件大小差异 > ${thresholdMb}MB），继续？`
+      });
+      if (!ok) return;
+      const summary = await app.diffSyncService.syncQualityUpdateWithReport(diff, thresholdMb, (phase, s, message) => {
+        updateBar(phase, s.total, s.success + s.failed, message || "");
+      });
+      bars.stop();
+      console.log(chalk.green(`音质更新完成：成功 ${summary.success}，失败 ${summary.failed}`));
+      if (summary.failures.length) {
+        const failureTable = new Table({ head: ["任务", "名称", "原因", "重试次数"] });
+        for (const f of summary.failures) {
+          failureTable.push([f.id, f.name, f.reason, f.attempts]);
+        }
+        console.log(chalk.red("失败重试面板："));
+        console.log(failureTable.toString());
+      }
+    } else {
+      bars.stop();
+      throw new Error(`未知同步目标: ${opts.target}`);
     }
   });
 

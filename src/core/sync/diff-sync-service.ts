@@ -234,6 +234,80 @@ export class DiffSyncService {
     return this.mergeSummary(deleted, uploaded);
   }
 
+  collectQualityUpdateCandidates(
+    diff: DiffResult,
+    thresholdMb = 5
+  ): Array<{ local: LocalSong; cloud: CloudSong; sizeDiffBytes: number }> {
+    const thresholdBytes = thresholdMb * 1024 * 1024;
+    const candidates: Array<{ local: LocalSong; cloud: CloudSong; sizeDiffBytes: number }> = [];
+    const seenLocalPath = new Set<string>();
+    const pairs = [...diff.matchedExact, ...diff.matchedFuzzy.map((x) => ({ local: x.local, cloud: x.cloud }))];
+    for (const pair of pairs) {
+      if (seenLocalPath.has(pair.local.path)) continue;
+      const sizeDiffBytes = Math.abs(pair.local.size - pair.cloud.fileSize);
+      if (sizeDiffBytes <= thresholdBytes) continue;
+      seenLocalPath.add(pair.local.path);
+      candidates.push({ local: pair.local, cloud: pair.cloud, sizeDiffBytes });
+    }
+    return candidates;
+  }
+
+  async syncQualityUpdateWithReport(
+    diff: DiffResult,
+    thresholdMb = 5,
+    onProgress?: (phase: string, summary: BatchTaskSummary, message?: string) => void
+  ): Promise<BatchTaskSummary> {
+    const candidates = this.collectQualityUpdateCandidates(diff, thresholdMb);
+    const summary: BatchTaskSummary = {
+      total: candidates.length,
+      success: 0,
+      failed: 0,
+      failures: []
+    };
+    for (const item of candidates) {
+      const songId = item.cloud.songId;
+      if (!songId) {
+        summary.failed += 1;
+        summary.failures.push({
+          id: String(item.cloud.cloudId),
+          name: item.local.fileName,
+          reason: "缺少 songId，无法删除云端旧文件",
+          attempts: 0
+        });
+        onProgress?.("quality-update", summary, `${item.local.fileName} 失败: 缺少 songId`);
+        continue;
+      }
+      try {
+        await this.cloudService.deleteCloudSongs([songId]);
+        let lastUiAt = 0;
+        await this.cloudService.uploadSong(item.local.path, (p) => {
+          const now = Date.now();
+          if (now - lastUiAt < 300 && p.loaded < p.total) return;
+          lastUiAt = now;
+          const percent = p.total > 0 ? Math.round((p.loaded / p.total) * 100) : 0;
+          onProgress?.(
+            "quality-update",
+            summary,
+            `${item.local.fileName} 上传中 ${percent}% @ ${this.formatSpeed(p.speedBps)}`
+          );
+        });
+        summary.success += 1;
+        onProgress?.("quality-update", summary, `${item.local.fileName} 已完成音质更新`);
+      } catch (error) {
+        summary.failed += 1;
+        summary.failures.push({
+          id: String(songId),
+          name: item.local.fileName,
+          reason: (error as Error).message,
+          attempts: 1
+        });
+        onProgress?.("quality-update", summary, `${item.local.fileName} 失败: ${(error as Error).message}`);
+      }
+    }
+    await this.cloudService.getCloudSongs(true);
+    return summary;
+  }
+
   async syncLocalSide(
     diff: DiffResult,
     options: { deleteLocalOnly?: boolean; downloadCloudOnly?: boolean; downloadDir?: string } = {},
