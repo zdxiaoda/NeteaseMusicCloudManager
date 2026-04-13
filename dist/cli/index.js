@@ -5,6 +5,10 @@ import cliProgress from "cli-progress";
 import { input, password, select, confirm } from "@inquirer/prompts";
 import chalk from "chalk";
 import ora from "ora";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { createApp } from "../bootstrap.js";
 import { startTui } from "../tui/app.js";
 import { ensureApiServer } from "../infra/api/api-server-manager.js";
@@ -17,6 +21,40 @@ const withAppReady = async (baseUrl) => {
         await ensureApiServer(url);
     }
     return createApp(url);
+};
+const commandExists = (name) => {
+    const checker = process.platform === "win32" ? "where" : "which";
+    const result = spawnSync(checker, [name], { stdio: "ignore" });
+    return result.status === 0;
+};
+const renderQrImageInTerminal = (dataUri) => {
+    const prefix = "data:image/png;base64,";
+    if (!dataUri.startsWith(prefix))
+        return false;
+    const tmpFile = path.join(os.tmpdir(), `ncm-qr-${Date.now()}.png`);
+    try {
+        fs.writeFileSync(tmpFile, Buffer.from(dataUri.slice(prefix.length), "base64"));
+        if (commandExists("kitten")) {
+            const res = spawnSync("kitten", ["icat", tmpFile], { stdio: "inherit" });
+            return res.status === 0;
+        }
+        if (commandExists("imgcat")) {
+            const res = spawnSync("imgcat", [tmpFile], { stdio: "inherit" });
+            return res.status === 0;
+        }
+        return false;
+    }
+    catch {
+        return false;
+    }
+    finally {
+        try {
+            fs.unlinkSync(tmpFile);
+        }
+        catch {
+            // ignore temp file cleanup errors
+        }
+    }
 };
 program
     .command("login")
@@ -49,8 +87,12 @@ program
     }
     else {
         const qr = await app.authService.createQr();
-        console.log(chalk.cyan("请扫码登录（复制链接到浏览器查看二维码图片）："));
-        console.log(qr.qrimg);
+        console.log(chalk.cyan("请扫码登录："));
+        const rendered = renderQrImageInTerminal(qr.qrimg);
+        if (!rendered) {
+            console.log(chalk.yellow("当前终端图片渲染不可用，回退为 data URL："));
+            console.log(qr.qrimg);
+        }
         const ok = await app.authService.waitQrLogin(qr.key);
         if (!ok)
             throw new Error("二维码登录超时");
