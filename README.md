@@ -8,7 +8,8 @@
 - 云盘列表、上传、删除、匹配、下载
 - 本地音乐库扫描与云盘差异比对
 - 双向同步（同步云盘端 / 同步本地端）
-- 缓存与限流，降低接口风控概率
+- 音质 update 同步（匹配歌曲大小差异超阈值时重传）
+- 上传实时速度显示与失败重试
 
 ---
 
@@ -112,6 +113,17 @@ npm run dev -- cloud:match 123 987654
 npm run dev -- cloud:download 123 "/path/to/download-dir"
 ```
 
+说明：
+
+- 上传默认使用网易云文档中的“客户端直传流程”：
+  - `POST /cloud/upload/token`
+  - 上传到返回的 `uploadUrl`
+  - `POST /cloud/upload/complete`
+- `complete` 阶段会自动读取本地音频元数据并提交可选参数：
+  - `song`
+  - `artist`
+  - `album`
+
 ### 本地扫描与差异分析
 
 ```bash
@@ -131,7 +143,20 @@ npm run dev -- sync --target local --delete-local-only
 
 # 同步本地端：下载云盘独有
 npm run dev -- sync --target local --download-cloud-only --download-dir "/path/to/dir"
+
+# 音质 update 同步：匹配歌曲中，文件大小差异 > 3MB 执行“删云端+重传”
+npm run dev -- sync --target quality-update
+
+# 自定义阈值（MB）
+npm run dev -- sync --target quality-update --quality-threshold-mb 6
 ```
+
+同步说明：
+
+- 上传任务失败最多重试 3 次
+- 重试间隔固定 5 秒
+- 上传进度会显示实时速度（`B/s`、`KB/s`、`MB/s`）
+- 上传成功判定以上传接口返回为准（不做“上传后立即拉云端”复核，避免 2 分钟缓存误判）
 
 ---
 
@@ -176,6 +201,8 @@ npm run dev:tui
 - 配置与会话（含 cookie）：`~/.config/ncm-cloud-manager-nodejs/config.json`（Linux）
 
 > 不同系统下配置目录由 `conf` 库按平台规则决定。
+>
+> 当前版本云盘列表读取为“每次实时拉取远端”，不会命中本地云盘列表缓存。
 
 ---
 
@@ -200,6 +227,10 @@ npm run dev -- diff --all
 ### Q3: TUI 点击后无法操作？
 
 按 `Esc` 回菜单焦点，或直接鼠标点击左侧菜单项。
+
+### Q4: 为什么上传后马上在列表里看不到？
+
+网易云 API 存在短时缓存（常见约 2 分钟）与后端处理延迟，属于正常现象。当前工具不会用“立即拉取列表”来判定上传失败。
 
 ---
 
