@@ -1,0 +1,50 @@
+import fg from "fast-glob";
+import fs from "node:fs";
+import crypto from "node:crypto";
+import path from "node:path";
+import { parseFile } from "music-metadata";
+import { CacheRepo } from "../../infra/db/cache-repo.js";
+import { LocalSong } from "../types.js";
+
+const MUSIC_EXTENSIONS = ["mp3", "flac", "wav", "m4a", "ogg", "aac"];
+
+export class LocalScanner {
+  constructor(private readonly cacheRepo: CacheRepo) {}
+
+  async scan(folder: string): Promise<LocalSong[]> {
+    const patterns = MUSIC_EXTENSIONS.map((ext) => `**/*.${ext}`);
+    const files = await fg(patterns, {
+      cwd: folder,
+      onlyFiles: true,
+      absolute: true,
+      caseSensitiveMatch: false
+    });
+    const songs: LocalSong[] = [];
+    for (const filePath of files) {
+      const stat = fs.statSync(filePath);
+      const metadata = await parseFile(filePath).catch(() => undefined);
+      songs.push({
+        path: filePath,
+        fileName: path.basename(filePath),
+        title: metadata?.common.title || path.parse(filePath).name,
+        artist: metadata?.common.artist || "未知歌手",
+        album: metadata?.common.album || "未知专辑",
+        durationMs: Math.round((metadata?.format.duration || 0) * 1000),
+        size: stat.size,
+        md5: await this.hashMd5(filePath)
+      });
+    }
+    this.cacheRepo.replaceLocalSongs(songs);
+    return songs;
+  }
+
+  private hashMd5(filePath: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const hash = crypto.createHash("md5");
+      const stream = fs.createReadStream(filePath);
+      stream.on("data", (chunk) => hash.update(chunk));
+      stream.on("end", () => resolve(hash.digest("hex")));
+      stream.on("error", reject);
+    });
+  }
+}
