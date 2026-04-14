@@ -6,7 +6,6 @@ import { input, password, select, confirm } from "@inquirer/prompts";
 import chalk from "chalk";
 import ora from "ora";
 import { createApp } from "../bootstrap.js";
-import { startTui } from "../tui/app.js";
 import { ensureApiServer } from "../infra/api/api-server-manager.js";
 import { openQrImageWithSystemDefault, showLoginQr } from "../infra/qr-display.js";
 
@@ -366,6 +365,7 @@ program
     if (process.env.NCM_AUTO_START_API !== "0") {
       await ensureApiServer(baseUrl);
     }
+    const { startTui } = await import("../tui/app.js");
     await startTui(baseUrl, { ascii: Boolean(opts.ascii) });
   });
 

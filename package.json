@@ -7,24 +7,33 @@
     "ncm-cloud": "dist/cli/index.js",
     "ncm-cloud-tui": "dist/tui/index.js"
   },
+  "pkg": {
+    "scripts": [
+      "dist-pkg/*.cjs",
+      "node_modules/@neteasecloudmusicapienhanced/api/**/*.js"
+    ],
+    "assets": [
+      "node_modules/@neteasecloudmusicapienhanced/api/package.json"
+    ]
+  },
   "scripts": {
     "dev": "tsx src/cli/index.ts",
     "dev:tui": "tsx src/tui/index.ts",
     "build": "tsc -p tsconfig.json",
-    "bundle:cli": "esbuild src/cli/index.ts --bundle --platform=node --format=cjs --target=node20 --outfile=dist-pkg/cli.cjs --banner:js='#!/usr/bin/env node' --external:better-sqlite3",
-    "bundle:tui": "esbuild src/tui/index.ts --bundle --platform=node --format=cjs --target=node20 --outfile=dist-pkg/tui.cjs --banner:js='#!/usr/bin/env node' --external:better-sqlite3",
-    "bundle:pkg": "pnpm run bundle:cli && pnpm run bundle:tui",
+    "bundle:cli": "esbuild src/cli/index.ts --bundle --platform=node --format=cjs --target=node20 --outfile=dist-pkg/cli.cjs --external:better-sqlite3 --external:blessed --external:term.js --external:pty.js --define:import.meta.url=__filename",
+    "bundle:tui": "esbuild src/tui/index.ts --bundle --platform=node --format=cjs --target=node20 --outfile=dist-pkg/tui.cjs --external:better-sqlite3 --external:blessed --external:term.js --external:pty.js --define:import.meta.url=__filename",
+    "bundle:pkg": "npm run bundle:cli && npm run bundle:tui",
     "pkg:cli:win": "pkg dist-pkg/cli.cjs --targets node20-win-x64 --output artifacts/ncm-cloud-win.exe",
     "pkg:cli:linux": "pkg dist-pkg/cli.cjs --targets node20-linux-x64 --output artifacts/ncm-cloud-linux",
     "pkg:cli:mac": "pkg dist-pkg/cli.cjs --targets node20-macos-x64 --output artifacts/ncm-cloud-macos",
     "pkg:tui:win": "pkg dist-pkg/tui.cjs --targets node20-win-x64 --output artifacts/ncm-cloud-tui-win.exe",
     "pkg:tui:linux": "pkg dist-pkg/tui.cjs --targets node20-linux-x64 --output artifacts/ncm-cloud-tui-linux",
     "pkg:tui:mac": "pkg dist-pkg/tui.cjs --targets node20-macos-x64 --output artifacts/ncm-cloud-tui-macos",
-    "pkg:win": "pnpm run pkg:cli:win && pnpm run pkg:tui:win",
-    "pkg:linux": "pnpm run pkg:cli:linux && pnpm run pkg:tui:linux",
-    "pkg:mac": "pnpm run pkg:cli:mac && pnpm run pkg:tui:mac",
-    "pkg:all": "pnpm run pkg:win && pnpm run pkg:linux && pnpm run pkg:mac",
-    "build:exe": "pnpm run build && pnpm run bundle:pkg && pnpm run pkg:all",
+    "pkg:win": "npm run pkg:cli:win && npm run pkg:tui:win",
+    "pkg:linux": "npm run pkg:cli:linux && npm run pkg:tui:linux",
+    "pkg:mac": "npm run pkg:cli:mac && npm run pkg:tui:mac",
+    "pkg:all": "npm run pkg:win && npm run pkg:linux && npm run pkg:mac",
+    "build:exe": "npm run build && npm run bundle:pkg && npm run pkg:all",
     "start": "node dist/cli/index.js",
     "start:tui": "node dist/tui/index.js",
     "typecheck": "tsc --noEmit"
