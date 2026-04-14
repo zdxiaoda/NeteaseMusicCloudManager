@@ -1,5 +1,9 @@
 import axios from "axios";
 import { spawn, ChildProcess } from "node:child_process";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const apiAppPath = require.resolve("@neteasecloudmusicapienhanced/api/app.js");
 
 let serverProcess: ChildProcess | undefined;
 
@@ -48,38 +52,31 @@ export async function ensureApiServer(baseUrl: string): Promise<void> {
   }
 
   const port = parsePort(baseUrl);
-  const commands: Array<{ cmd: string; args: string[]; readyTimeoutMs: number }> = [
-    // Prefer local cached/global npx first.
-    { cmd: "npx", args: ["@neteasecloudmusicapienhanced/api"], readyTimeoutMs: 45000 },
-    // Fallback for first run without cache.
-    { cmd: "npx", args: ["-y", "@neteasecloudmusicapienhanced/api"], readyTimeoutMs: 90000 }
-  ];
+  const readyTimeoutMs = 60000;
 
-  for (const item of commands) {
-    const proc = spawn(item.cmd, item.args, {
-      env: { ...process.env, PORT: port, NCM_LOG_LEVEL: "error" },
-      stdio: "ignore",
-      detached: true
-    });
-    proc.unref();
-    serverProcess = proc;
+  const proc = spawn(process.execPath, [apiAppPath], {
+    env: { ...process.env, PORT: port, NCM_LOG_LEVEL: "error" },
+    stdio: "ignore",
+    detached: true
+  });
+  proc.unref();
+  serverProcess = proc;
 
-    const ready = await waitReady(baseUrl, item.readyTimeoutMs);
-    if (ready) {
-      return;
-    }
-
-    if (!proc.killed && proc.pid) {
-      try {
-        process.kill(-proc.pid, "SIGTERM");
-      } catch {
-        // ignore kill failures for already-exited process
-      }
-    }
-    serverProcess = undefined;
+  const ready = await waitReady(baseUrl, readyTimeoutMs);
+  if (ready) {
+    return;
   }
 
+  if (!proc.killed && proc.pid) {
+    try {
+      process.kill(-proc.pid, "SIGTERM");
+    } catch {
+      // ignore kill failures for already-exited process
+    }
+  }
+  serverProcess = undefined;
+
   throw new Error(
-    `自动启动网易云 API 失败，请按文档手动启动: PORT=${port} npx @neteasecloudmusicapienhanced/api`
+    `自动启动网易云 API 失败，请按文档手动启动: PORT=${port} node "${apiAppPath}"`
   );
 }
