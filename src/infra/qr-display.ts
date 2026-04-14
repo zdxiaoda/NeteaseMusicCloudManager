@@ -6,15 +6,24 @@ import { spawnSync } from "node:child_process";
 import { PNG } from "pngjs";
 
 const require = createRequire(import.meta.url);
-const { image2sixel } = require("sixel") as {
-  image2sixel: (
-    data: Uint8Array,
-    width: number,
-    height: number,
-    maxColors?: number,
-    backgroundSelect?: number
-  ) => string;
-};
+type Image2Sixel = (
+  data: Uint8Array,
+  width: number,
+  height: number,
+  maxColors?: number,
+  backgroundSelect?: number
+) => string;
+let image2sixel: Image2Sixel | undefined;
+
+function getImage2Sixel(): Image2Sixel | undefined {
+  if (image2sixel) return image2sixel;
+  try {
+    image2sixel = (require("sixel") as { image2sixel: Image2Sixel }).image2sixel;
+    return image2sixel;
+  } catch {
+    return undefined;
+  }
+}
 
 const SIXEL_MAX_QR_PX = 200;
 const DATA_URI_PREFIX = "data:image/png;base64,";
@@ -62,6 +71,8 @@ function toPngBuffer(dataUri: string): Buffer | undefined {
 export function renderQrAsSixel(dataUri: string, writeRaw: (text: string) => void): boolean {
   if (!process.stdout.isTTY) return false;
   if (process.env.NCM_QR_SIXEL === "0") return false;
+  const toSixel = getImage2Sixel();
+  if (!toSixel) return false;
   try {
     const pngBuffer = toPngBuffer(dataUri);
     if (!pngBuffer) return false;
@@ -71,7 +82,7 @@ export function renderQrAsSixel(dataUri: string, writeRaw: (text: string) => voi
     const { w: tw, h: th } = maxDimensionClamp(w, h, SIXEL_MAX_QR_PX);
     const src = new Uint8Array(png.data);
     const rgba = tw !== w || th !== h ? scaleRgbaNearest(src, w, h, tw, th) : src;
-    const seq = image2sixel(rgba, tw, th, 256, 0);
+    const seq = toSixel(rgba, tw, th, 256, 0);
     writeRaw(seq);
     return true;
   } catch {

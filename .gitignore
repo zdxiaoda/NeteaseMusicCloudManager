@@ -91,3 +91,5 @@ out/
 .vscode/
 
 dist/
+dist-pkg/
+artifacts/

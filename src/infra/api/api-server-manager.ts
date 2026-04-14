@@ -3,9 +3,18 @@ import { spawn, ChildProcess } from "node:child_process";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const apiAppPath = require.resolve("@neteasecloudmusicapienhanced/api/app.js");
 
 let serverProcess: ChildProcess | undefined;
+
+function resolveApiAppPath(): string {
+  try {
+    return require.resolve("@neteasecloudmusicapienhanced/api/app.js");
+  } catch {
+    throw new Error(
+      "未找到内置 API 启动模块，请先手动启动 @neteasecloudmusicapienhanced/api，或设置 NCM_AUTO_START_API=0 关闭自动拉起。"
+    );
+  }
+}
 
 function isLocalAddress(baseUrl: string): boolean {
   try {
@@ -53,6 +62,7 @@ export async function ensureApiServer(baseUrl: string): Promise<void> {
 
   const port = parsePort(baseUrl);
   const readyTimeoutMs = 60000;
+  const apiAppPath = resolveApiAppPath();
 
   const proc = spawn(process.execPath, [apiAppPath], {
     env: { ...process.env, PORT: port, NCM_LOG_LEVEL: "error" },
