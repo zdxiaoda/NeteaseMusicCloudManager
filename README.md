@@ -212,7 +212,7 @@ npm run dev:tui
 
 ## 8. 数据存储位置
 
-- SQLite 缓存库：`~/.ncm-cloud-manager/cache.db`
+- 本地缓存（JSON）：`~/.ncm-cloud-manager/cache.json`
 - 配置与会话（含 cookie）：`~/.config/ncm-cloud-manager-nodejs/config.json`（Linux）
 
 > 不同系统下配置目录由 `conf` 库按平台规则决定。

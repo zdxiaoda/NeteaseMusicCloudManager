@@ -1,19 +1,51 @@
 import axios from "axios";
 import { spawn, ChildProcess } from "node:child_process";
 import { createRequire } from "node:module";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
+const processWithPkg = process as NodeJS.Process & {
+  pkg?: { defaultEntrypoint?: string };
+};
 
 let serverProcess: ChildProcess | undefined;
 
 function resolveApiAppPath(): string {
+  const candidates: string[] = [];
+
   try {
-    return require.resolve("@neteasecloudmusicapienhanced/api/app.js");
+    candidates.push(require.resolve("@neteasecloudmusicapienhanced/api/app.js"));
   } catch {
-    throw new Error(
-      "未找到内置 API 启动模块，请先手动启动 @neteasecloudmusicapienhanced/api，或设置 NCM_AUTO_START_API=0 关闭自动拉起。"
-    );
+    // ignore and fallback to other resolution strategies
   }
+
+  try {
+    const pkgJsonPath = require.resolve("@neteasecloudmusicapienhanced/api/package.json");
+    candidates.push(path.join(path.dirname(pkgJsonPath), "app.js"));
+  } catch {
+    // ignore and fallback to snapshot probing
+  }
+
+  const snapshotRoots = new Set<string>();
+  const currentFilePath = fileURLToPath(import.meta.url);
+  snapshotRoots.add(path.resolve(path.dirname(currentFilePath), "..", "..", ".."));
+  if (processWithPkg.pkg?.defaultEntrypoint) {
+    snapshotRoots.add(path.resolve(path.dirname(processWithPkg.pkg.defaultEntrypoint), ".."));
+  }
+
+  for (const root of snapshotRoots) {
+    candidates.push(path.join(root, "node_modules/@neteasecloudmusicapienhanced/api/app.js"));
+  }
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+
+  throw new Error(
+    "未找到内置 API 启动模块，请先手动启动 @neteasecloudmusicapienhanced/api，或设置 NCM_AUTO_START_API=0 关闭自动拉起。"
+  );
 }
 
 function isLocalAddress(baseUrl: string): boolean {
