@@ -5,26 +5,10 @@ import cliProgress from "cli-progress";
 import { input, password, select, confirm } from "@inquirer/prompts";
 import chalk from "chalk";
 import ora from "ora";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { createRequire } from "node:module";
-import { spawnSync } from "node:child_process";
-import { PNG } from "pngjs";
-
-const require = createRequire(import.meta.url);
-const { image2sixel } = require("sixel") as {
-  image2sixel: (
-    data: Uint8Array,
-    width: number,
-    height: number,
-    maxColors?: number,
-    backgroundSelect?: number
-  ) => string;
-};
 import { createApp } from "../bootstrap.js";
 import { startTui } from "../tui/app.js";
 import { ensureApiServer } from "../infra/api/api-server-manager.js";
+import { openQrImageWithSystemDefault, showLoginQr } from "../infra/qr-display.js";
 
 const program = new Command();
 const defaultBaseUrl = process.env.NCM_API_BASE_URL || "http://localhost:3000";
@@ -37,115 +21,6 @@ const withAppReady = async (baseUrl?: string) => {
     await ensureApiServer(url);
   }
   return createApp(url);
-};
-
-const commandExists = (name: string): boolean => {
-  const checker = process.platform === "win32" ? "where" : "which";
-  const result = spawnSync(checker, [name], { stdio: "ignore" });
-  return result.status === 0;
-};
-
-/** 终端内联位图（Sixel）；不支持时多数终端会忽略或略乱码，可设 NCM_QR_SIXEL=0 跳过。 */
-const SIXEL_MAX_QR_PX = 200;
-
-const maxDimensionClamp = (sw: number, sh: number, maxDim: number): { w: number; h: number } => {
-  if (sw <= maxDim && sh <= maxDim) return { w: sw, h: sh };
-  if (sw >= sh) {
-    const w = maxDim;
-    const h = Math.max(1, Math.round((sh * maxDim) / sw));
-    return { w, h };
-  }
-  const h = maxDim;
-  const w = Math.max(1, Math.round((sw * maxDim) / sh));
-  return { w, h };
-};
-
-const scaleRgbaNearest = (src: Uint8Array, sw: number, sh: number, dw: number, dh: number): Uint8Array => {
-  const out = new Uint8Array(dw * dh * 4);
-  for (let y = 0; y < dh; y++) {
-    const sy = Math.min(Math.floor((y * sh) / dh), sh - 1);
-    for (let x = 0; x < dw; x++) {
-      const sx = Math.min(Math.floor((x * sw) / dw), sw - 1);
-      const si = (sy * sw + sx) * 4;
-      const oi = (y * dw + x) * 4;
-      out[oi] = src[si]!;
-      out[oi + 1] = src[si + 1]!;
-      out[oi + 2] = src[si + 2]!;
-      out[oi + 3] = src[si + 3]!;
-    }
-  }
-  return out;
-};
-
-const tryRenderQrSixel = (pngBuffer: Buffer): boolean => {
-  if (!process.stdout.isTTY) return false;
-  if (process.env.NCM_QR_SIXEL === "0") return false;
-  try {
-    const png = PNG.sync.read(pngBuffer);
-    const w = png.width;
-    const h = png.height;
-    const { w: tw, h: th } = maxDimensionClamp(w, h, SIXEL_MAX_QR_PX);
-    const src = new Uint8Array(png.data);
-    const rgba = tw !== w || th !== h ? scaleRgbaNearest(src, w, h, tw, th) : src;
-    const seq = image2sixel(rgba, tw, th, 256, 0);
-    console.log(seq);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-/** 将二维码 PNG 写入临时文件并用系统默认应用打开（Windows / macOS / Linux）。 */
-const openQrImageWithSystemDefault = (dataUri: string): boolean => {
-  const prefix = "data:image/png;base64,";
-  if (!dataUri.startsWith(prefix)) return false;
-  const tmpFile = path.join(os.tmpdir(), `ncm-qr-open-${Date.now()}.png`);
-  try {
-    fs.writeFileSync(tmpFile, Buffer.from(dataUri.slice(prefix.length), "base64"));
-    if (process.platform === "win32") {
-      const shell = process.env.ComSpec || "cmd.exe";
-      const res = spawnSync(shell, ["/c", "start", "", tmpFile], {
-        stdio: "ignore",
-        windowsHide: true
-      });
-      return res.status === 0;
-    }
-    if (process.platform === "darwin") {
-      const res = spawnSync("open", [tmpFile], { stdio: "ignore" });
-      return res.status === 0;
-    }
-    if (process.platform === "linux") {
-      if (!commandExists("xdg-open")) return false;
-      const res = spawnSync("xdg-open", [tmpFile], { stdio: "ignore" });
-      return res.status === 0;
-    }
-    return false;
-  } catch {
-    return false;
-  }
-};
-
-/** 登录二维码展示：默认 Sixel → 系统打开图片 → 最后输出 data URL。 */
-const showLoginQr = (dataUri: string): "sixel" | "external" | "data" => {
-  const prefix = "data:image/png;base64,";
-  if (!dataUri.startsWith(prefix)) {
-    console.log(chalk.yellow("无效的二维码 data URI，原始内容："));
-    console.log(dataUri);
-    return "data";
-  }
-  const pngBuffer = Buffer.from(dataUri.slice(prefix.length), "base64");
-
-  if (tryRenderQrSixel(pngBuffer)) {
-    return "sixel";
-  }
-
-  if (openQrImageWithSystemDefault(dataUri)) {
-    return "external";
-  }
-
-  console.log(chalk.yellow("无法在终端显示（Sixel）或系统打开图片，请手动复制以下 data URL 到浏览器："));
-  console.log(dataUri);
-  return "data";
 };
 
 program
@@ -180,11 +55,14 @@ program
     } else {
       const qr = await app.authService.createQr();
       console.log(chalk.cyan("请扫码登录："));
-      const mode = showLoginQr(qr.qrimg);
+      const mode = showLoginQr(qr.qrimg, { allowSixel: true, writeRaw: (text) => console.log(text) });
       if (mode === "sixel") {
         console.log(chalk.gray("已在终端内显示二维码（Sixel）。"));
       } else if (mode === "external") {
         console.log(chalk.gray("已使用系统默认应用打开二维码图片。"));
+      } else {
+        console.log(chalk.yellow("无法在终端显示（Sixel）或系统打开图片，请手动复制以下 data URL 到浏览器："));
+        console.log(qr.qrimg);
       }
       const qrFallbackAction = (await input({
         message: "若未看到二维码：输入 o 打开图片，输入 p 打印 data URL，直接回车继续等待扫码"
