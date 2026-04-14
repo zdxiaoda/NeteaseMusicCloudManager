@@ -8,7 +8,7 @@
 - 云盘列表、上传、删除、匹配、下载
 - 本地音乐库扫描与云盘差异比对
 - 双向同步（同步云盘端 / 同步本地端）
-- 音质 update 同步（匹配歌曲大小差异超阈值时重传）
+- 音质更新（匹配歌曲大小差异超阈值时重传）
 - 上传实时速度显示与失败重试
 
 ---
@@ -144,7 +144,7 @@ npm run dev -- sync --target local --delete-local-only
 # 同步本地端：下载云盘独有
 npm run dev -- sync --target local --download-cloud-only --download-dir "/path/to/dir"
 
-# 音质 update 同步：匹配歌曲中，文件大小差异 > 3MB 执行“删云端+重传”
+# 音质更新：匹配歌曲中，文件大小差异 > 3MB 执行“删云端+重传”
 npm run dev -- sync --target quality-update
 
 # 自定义阈值（MB）

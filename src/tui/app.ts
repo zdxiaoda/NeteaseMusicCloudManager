@@ -231,7 +231,7 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
         "8. 同步云盘端",
         "9. 同步本地端（删除本地独有）",
         "10. 同步本地端（下载云盘独有）",
-        "11. 音质 update 同步（>3MB）",
+        "11. 音质更新（>3MB）",
         "q. 退出"
       ];
 
