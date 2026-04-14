@@ -11,6 +11,20 @@
     "dev": "tsx src/cli/index.ts",
     "dev:tui": "tsx src/tui/index.ts",
     "build": "tsc -p tsconfig.json",
+    "bundle:cli": "esbuild src/cli/index.ts --bundle --platform=node --format=cjs --target=node20 --outfile=dist-pkg/cli.cjs --banner:js='#!/usr/bin/env node' --external:better-sqlite3",
+    "bundle:tui": "esbuild src/tui/index.ts --bundle --platform=node --format=cjs --target=node20 --outfile=dist-pkg/tui.cjs --banner:js='#!/usr/bin/env node' --external:better-sqlite3",
+    "bundle:pkg": "pnpm run bundle:cli && pnpm run bundle:tui",
+    "pkg:cli:win": "pkg dist-pkg/cli.cjs --targets node20-win-x64 --output artifacts/ncm-cloud-win.exe",
+    "pkg:cli:linux": "pkg dist-pkg/cli.cjs --targets node20-linux-x64 --output artifacts/ncm-cloud-linux",
+    "pkg:cli:mac": "pkg dist-pkg/cli.cjs --targets node20-macos-x64 --output artifacts/ncm-cloud-macos",
+    "pkg:tui:win": "pkg dist-pkg/tui.cjs --targets node20-win-x64 --output artifacts/ncm-cloud-tui-win.exe",
+    "pkg:tui:linux": "pkg dist-pkg/tui.cjs --targets node20-linux-x64 --output artifacts/ncm-cloud-tui-linux",
+    "pkg:tui:mac": "pkg dist-pkg/tui.cjs --targets node20-macos-x64 --output artifacts/ncm-cloud-tui-macos",
+    "pkg:win": "pnpm run pkg:cli:win && pnpm run pkg:tui:win",
+    "pkg:linux": "pnpm run pkg:cli:linux && pnpm run pkg:tui:linux",
+    "pkg:mac": "pnpm run pkg:cli:mac && pnpm run pkg:tui:mac",
+    "pkg:all": "pnpm run pkg:win && pnpm run pkg:linux && pnpm run pkg:mac",
+    "build:exe": "pnpm run build && pnpm run bundle:pkg && pnpm run pkg:all",
     "start": "node dist/cli/index.js",
     "start:tui": "node dist/tui/index.js",
     "typecheck": "tsc --noEmit"
@@ -48,6 +62,7 @@
     "@types/pngjs": "^6.0.5",
     "@types/string-similarity": "^4.0.2",
     "@yao-pkg/pkg": "^6.14.2",
+    "esbuild": "0.27.7",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   }

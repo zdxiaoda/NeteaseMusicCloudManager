@@ -16,7 +16,7 @@
 ## 1. 环境要求
 
 - Node.js 18+
-- npm 9+
+- pnpm 10+（可通过 `corepack enable` 启用）
 - 可访问网易云 API 服务（本项目默认会自动尝试拉起）
 
 ---
@@ -26,26 +26,41 @@
 在项目目录执行：
 
 ```bash
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
 开发模式：
 
 ```bash
 # CLI
-npm run dev -- --help
+pnpm run dev -- --help
 
 # TUI（独立入口）
-npm run dev:tui
+pnpm run dev:tui
 ```
 
 生产模式（编译后）：
 
 ```bash
-npm run start -- --help
-npm run start:tui
+pnpm run start -- --help
+pnpm run start:tui
 ```
+
+编译跨平台可执行文件（Windows/Linux/macOS）：
+
+```bash
+pnpm run build:exe
+```
+
+输出目录：`artifacts/`
+
+- `ncm-cloud-win.exe`
+- `ncm-cloud-linux`
+- `ncm-cloud-macos`
+- `ncm-cloud-tui-win.exe`
+- `ncm-cloud-tui-linux`
+- `ncm-cloud-tui-macos`
 
 ---
 
