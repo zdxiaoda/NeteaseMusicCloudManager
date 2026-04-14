@@ -13,7 +13,8 @@
       "node_modules/@neteasecloudmusicapienhanced/api/**/*.js"
     ],
     "assets": [
-      "node_modules/@neteasecloudmusicapienhanced/api/**/*"
+      "node_modules/@neteasecloudmusicapienhanced/api/**/*",
+      "node_modules/blessed/**/*"
     ]
   },
   "scripts": {
