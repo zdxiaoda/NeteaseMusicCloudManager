@@ -22,6 +22,14 @@ export interface CloudSong {
   md5?: string;
 }
 
+export interface SearchSong {
+  songId: number;
+  name: string;
+  artist: string;
+  album: string;
+  durationMs: number;
+}
+
 export interface LocalSong {
   path: string;
   fileName: string;

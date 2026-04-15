@@ -114,6 +114,10 @@ function formatTextTable(headers: string[], rows: string[][], widths: number[]):
   return [sep, renderRow(headers), sep, ...rows.map(renderRow), sep].join("\n");
 }
 
+function bytesToMb(bytes: number): number {
+  return bytes / (1024 * 1024);
+}
+
 function buildDiffDetailReport(diff: DiffResult, preferAscii: boolean, limit = 100): string {
   const sections: string[] = [];
   const take = <T,>(arr: T[]) => arr.slice(0, limit);
@@ -218,6 +222,7 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
         "9. Sync local side (delete local-only)",
         "10. Sync local side (download cloud-only)",
         "11. Sync quality update (>3MB)",
+        "12. Match unmatched cloud songs",
         "q. Quit"
       ]
     : [
@@ -232,6 +237,7 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
         "9. 同步本地端（删除本地独有）",
         "10. 同步本地端（下载云盘独有）",
         "11. 音质更新（>3MB）",
+        "12. 匹配云盘未匹配歌曲",
         "q. 退出"
       ];
 
@@ -966,6 +972,158 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
               : `音质更新完成：成功 ${summary.success}，失败 ${summary.failed}`
           );
         }
+      } else if (index === 11) {
+        const unmatched = await app.cloudService.getUnmatchedCloudSongs(false);
+        if (!unmatched.length) {
+          output.log(preferAscii ? "No unmatched cloud songs." : "当前没有未匹配云盘歌曲。");
+          return;
+        }
+        output.log(
+          preferAscii
+            ? `Found ${unmatched.length} unmatched cloud songs.`
+            : `发现未匹配云盘歌曲 ${unmatched.length} 首。`
+        );
+        const previewRows = unmatched.slice(0, 100).map((song) => [
+          String(song.cloudId),
+          song.simpleSongName,
+          song.artist
+        ]);
+        await showViewer(
+          preferAscii ? "Unmatched cloud songs" : "未匹配云盘歌曲",
+          formatTextTable(
+            ["CloudID", preferAscii ? "Song" : "歌曲名", preferAscii ? "Artist" : "歌手"],
+            previewRows,
+            [10, 36, 24]
+          ) +
+            (unmatched.length > 100
+              ? preferAscii
+                ? `\nOnly first 100 are shown, total ${unmatched.length}.`
+                : `\n仅展示前 100 首，总计 ${unmatched.length} 首。`
+              : ""),
+          { preserveFormatting: true }
+        );
+
+        const start = await askYesNo(preferAscii ? "Start manual matching now?" : "现在开始逐首人工匹配吗？");
+        if (!start) {
+          output.log(preferAscii ? "Cancelled" : "已取消");
+          return;
+        }
+
+        const searchLimit = 10;
+        for (const [i, target] of unmatched.entries()) {
+          const defaultKeywords = `${target.simpleSongName} ${target.artist}`.trim();
+          output.log(
+            `[${i + 1}/${unmatched.length}] CloudID=${target.cloudId} ${target.simpleSongName} - ${target.artist}`
+          );
+          const inputKeywords = await askInput(
+            preferAscii ? "Search keywords (editable):" : "搜索关键词（可编辑）：",
+            { initialValue: defaultKeywords }
+          );
+          if (inputKeywords === undefined) {
+            output.log(preferAscii ? "Cancelled current song." : "已取消当前歌曲匹配。");
+            continue;
+          }
+          const query = (inputKeywords || defaultKeywords).trim();
+          if (!query) {
+            output.log(preferAscii ? "Empty keywords, skipped." : "关键词为空，已跳过。");
+            continue;
+          }
+          output.log(preferAscii ? `Searching: ${query}` : `搜索：${query}`);
+          const results = await app.cloudService.searchCloudSongs(query, searchLimit);
+          if (!results.length) {
+            output.log(preferAscii ? "No search results, skipped." : "搜索无结果，已跳过。");
+            continue;
+          }
+
+          const resultRows = results.map((row) => [
+            String(row.songId),
+            row.name,
+            row.artist,
+            row.album,
+            String(Math.round(row.durationMs / 1000))
+          ]);
+          await showViewer(
+            preferAscii ? `Search: ${query}` : `搜索：${query}`,
+            formatTextTable(
+              ["SongID", preferAscii ? "Song" : "歌曲名", preferAscii ? "Artist" : "歌手", preferAscii ? "Album" : "专辑", "Sec"],
+              resultRows,
+              [10, 24, 16, 20, 6]
+            ),
+            { preserveFormatting: true }
+          );
+
+          const choose = await askChoice(
+            preferAscii ? "Select match result" : "选择匹配结果",
+            [
+              ...results.map((row) => ({
+                label: `${row.name} - ${row.artist} (#${row.songId})`,
+                value: `pick:${row.songId}` as const
+              })),
+              { label: preferAscii ? "Skip this song" : "跳过这首", value: "skip" as const },
+              { label: preferAscii ? "End matching" : "结束匹配", value: "stop" as const }
+            ]
+          );
+          if (!choose || choose === "skip") continue;
+          if (choose === "stop") break;
+          const pickedSongId = Number(choose.replace("pick:", ""));
+          if (!Number.isFinite(pickedSongId) || pickedSongId <= 0) {
+            output.log(preferAscii ? "Invalid selection, skipped." : "选择无效，已跳过。");
+            continue;
+          }
+          const selectedSong = results.find((row) => row.songId === pickedSongId);
+          if (!selectedSong) {
+            output.log(preferAscii ? "Selected song not found, skipped." : "未找到所选歌曲信息，已跳过。");
+            continue;
+          }
+          if (!target.songId || target.songId <= 0) {
+            output.log(
+              preferAscii
+                ? `Skipped: CloudID=${target.cloudId} has no cloud song sid, cannot call /cloud/match`
+                : `已跳过：CloudID=${target.cloudId} 缺少云盘歌曲 sid，无法调用 /cloud/match`
+            );
+            continue;
+          }
+          const durationDiffMs = Math.abs((target.durationMs || 0) - (selectedSong.durationMs || 0));
+          const remoteSize = await app.cloudService.getSongRemoteFileSize(selectedSong.songId);
+          const sizeDiffBytes = remoteSize ? Math.abs(target.fileSize - remoteSize) : undefined;
+          await showViewer(
+            preferAscii ? "Match comparison" : "匹配前对比",
+            formatTextTable(
+              [preferAscii ? "Field" : "字段", preferAscii ? "Cloud" : "云盘歌曲", preferAscii ? "Candidate" : "候选歌曲", preferAscii ? "Diff" : "差异"],
+              [
+                [
+                  preferAscii ? "Duration(s)" : "时长(s)",
+                  String(Math.round(target.durationMs / 1000)),
+                  String(Math.round(selectedSong.durationMs / 1000)),
+                  (durationDiffMs / 1000).toFixed(1)
+                ],
+                [
+                  preferAscii ? "Size(MB)" : "大小(MB)",
+                  bytesToMb(target.fileSize).toFixed(2),
+                  remoteSize ? bytesToMb(remoteSize).toFixed(2) : preferAscii ? "Unknown" : "未知",
+                  sizeDiffBytes ? bytesToMb(sizeDiffBytes).toFixed(2) : preferAscii ? "Unknown" : "未知"
+                ]
+              ],
+              [12, 14, 14, 14]
+            ),
+            { preserveFormatting: true }
+          );
+          const shouldMatch = await askYesNo(
+            preferAscii ? "Submit match with this candidate?" : "确认按此候选提交匹配吗？"
+          );
+          if (!shouldMatch) {
+            output.log(preferAscii ? "Skipped by confirmation." : "你取消了本次匹配。");
+            continue;
+          }
+          await app.cloudService.matchSong(target.songId, pickedSongId);
+          output.log(
+            preferAscii
+              ? `Matched sid=${target.songId} (CloudID=${target.cloudId}) -> SongID=${pickedSongId}`
+              : `匹配成功：sid=${target.songId} (CloudID=${target.cloudId}) -> SongID=${pickedSongId}`
+          );
+          screen.render();
+        }
+        output.log(preferAscii ? "Manual matching finished." : "人工匹配流程结束。");
       }
     } catch (error) {
       output.log(preferAscii ? `Failed: ${(error as Error).message}` : `执行失败: ${(error as Error).message}`);
@@ -978,7 +1136,7 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
   };
 
   menu.on("select", async (_item, idx) => {
-    if (idx === 11) {
+    if (idx === 12) {
       restoreConsole();
       screen.destroy();
       return;

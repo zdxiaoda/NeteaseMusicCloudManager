@@ -10,6 +10,9 @@ import { openQrImageWithSystemDefault, showLoginQr } from "../infra/qr-display.j
 
 const program = new Command();
 const defaultBaseUrl = process.env.NCM_API_BASE_URL || "http://localhost:3000";
+// Keep query length bounded to avoid overly long prompt input and noisy search requests.
+const SEARCH_KEYWORD_MAX_LENGTH = 200;
+const bytesToMb = (bytes: number) => bytes / (1024 * 1024);
 
 const createStatus = (message: string) => {
   console.log(chalk.cyan(message));
@@ -165,14 +168,153 @@ program
 
 program
   .command("cloud:match")
-  .argument("<cloudId>", "云盘歌曲 cloudId")
+  .argument("<cloudSongId>", "云盘歌曲 songId（/cloud/match 的 sid）")
   .argument("<songId>", "目标歌曲 songId")
   .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
   .description("执行云盘歌曲匹配")
-  .action(async (cloudId: string, songId: string, opts) => {
+  .action(async (cloudSongId: string, songId: string, opts) => {
     const app = await withAppReady(opts.baseUrl);
-    await app.cloudService.matchSong(Number(cloudId), Number(songId));
+    await app.cloudService.matchSong(Number(cloudSongId), Number(songId));
     console.log(chalk.green("匹配请求已提交"));
+  });
+
+program
+  .command("cloud:match:unmatched")
+  .option("--refresh", "执行前刷新云盘列表")
+  .option("--search-limit <n>", "每首歌展示的搜索结果数（默认 10）", "10")
+  .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
+  .description("筛选云盘未匹配歌曲并逐首人工匹配")
+  .action(async (opts) => {
+    const app = await withAppReady(opts.baseUrl);
+    const spinner = ora("加载未匹配云盘歌曲...").start();
+    const unmatched = await app.cloudService.getUnmatchedCloudSongs(Boolean(opts.refresh));
+    spinner.stop();
+    if (!unmatched.length) {
+      console.log(chalk.green("当前云盘中没有未匹配歌曲。"));
+      return;
+    }
+
+    console.log(chalk.yellow(`发现未匹配歌曲 ${unmatched.length} 首。`));
+    const previewTable = new Table({
+      head: ["CloudID", "文件名", "歌曲名", "歌手"],
+      colWidths: [12, 30, 30, 24]
+    });
+    for (const song of unmatched.slice(0, 100)) {
+      previewTable.push([song.cloudId, song.fileName, song.simpleSongName, song.artist]);
+    }
+    console.log(previewTable.toString());
+    if (unmatched.length > 100) {
+      console.log(chalk.gray(`仅展示前 100 首，实际 ${unmatched.length} 首。`));
+    }
+
+    const proceed = await confirm({ message: "开始逐首匹配？" });
+    if (!proceed) return;
+
+    const parsedLimit = Number(opts.searchLimit);
+    const searchLimit = Number.isFinite(parsedLimit) ? Math.max(1, parsedLimit) : 10;
+    for (const [i, target] of unmatched.entries()) {
+      const defaultKeywords = `${target.simpleSongName} ${target.artist}`.trim();
+      console.log(chalk.cyan(`\n[${i + 1}/${unmatched.length}] CloudID=${target.cloudId} ${target.simpleSongName} - ${target.artist}`));
+      const action = await select({
+        message: "操作",
+        choices: [
+          { name: "搜索并选择匹配", value: "search" },
+          { name: "跳过这首", value: "skip" },
+          { name: "结束本次匹配", value: "quit" }
+        ]
+      });
+      if (action === "quit") break;
+      if (action === "skip") continue;
+
+      console.log(chalk.gray(`建议关键词：${defaultKeywords || "(空)"}`));
+      const rawKeywords = (
+        await input({
+          message: "搜索关键词（可删减/重写，直接回车使用建议关键词）"
+        })
+      ).trim();
+      const keywords = rawKeywords.slice(0, SEARCH_KEYWORD_MAX_LENGTH);
+      if (rawKeywords.length > SEARCH_KEYWORD_MAX_LENGTH) {
+        console.log(chalk.yellow(`关键词过长，已截断到 ${SEARCH_KEYWORD_MAX_LENGTH} 字符。`));
+      }
+      const query = keywords || defaultKeywords;
+      if (!query) {
+        console.log(chalk.yellow("关键词为空，已跳过。"));
+        continue;
+      }
+
+      const searchSpinner = ora(`搜索：${query}`).start();
+      const results = await app.cloudService.searchCloudSongs(query, searchLimit);
+      searchSpinner.stop();
+      if (!results.length) {
+        console.log(chalk.yellow("无搜索结果，已跳过。"));
+        continue;
+      }
+
+      const resultTable = new Table({
+        head: ["序号", "SongID", "歌曲名", "歌手", "专辑", "时长(s)"],
+        colWidths: [8, 10, 24, 18, 20, 10]
+      });
+      for (const [idx, row] of results.entries()) {
+        resultTable.push([idx + 1, row.songId, row.name, row.artist, row.album, Math.round(row.durationMs / 1000)]);
+      }
+      console.log(resultTable.toString());
+
+      const selected = await select({
+        message: "选择对应歌曲（可不选）",
+        choices: [
+          ...results.map((row) => ({
+            name: `${row.name} - ${row.artist} (#${row.songId})`,
+            value: row.songId
+          })),
+          { name: "不选择（跳过）", value: 0 }
+        ]
+      });
+      if (selected === 0) {
+        console.log(chalk.gray("已跳过。"));
+        continue;
+      }
+      const selectedSong = results.find((row) => row.songId === Number(selected));
+      if (!selectedSong) {
+        console.log(chalk.yellow("未找到所选歌曲详情，已跳过。"));
+        continue;
+      }
+      if (!target.songId || target.songId <= 0) {
+        console.log(chalk.yellow(`跳过：CloudID=${target.cloudId} 缺少云盘歌曲 songId(sid)，无法调用 /cloud/match`));
+        continue;
+      }
+      const durationDiffMs = Math.abs((target.durationMs || 0) - (selectedSong.durationMs || 0));
+      const remoteSize = await app.cloudService.getSongRemoteFileSize(selectedSong.songId);
+      const sizeDiffBytes = remoteSize ? Math.abs(target.fileSize - remoteSize) : undefined;
+      const compareTable = new Table({
+        head: ["字段", "云盘歌曲", "候选歌曲", "差异"],
+        colWidths: [10, 18, 18, 18]
+      });
+      compareTable.push([
+        "时长(s)",
+        Math.round(target.durationMs / 1000),
+        Math.round(selectedSong.durationMs / 1000),
+        (durationDiffMs / 1000).toFixed(1)
+      ]);
+      compareTable.push([
+        "大小(MB)",
+        bytesToMb(target.fileSize).toFixed(2),
+        remoteSize ? bytesToMb(remoteSize).toFixed(2) : "未知",
+        sizeDiffBytes ? bytesToMb(sizeDiffBytes).toFixed(2) : "未知"
+      ]);
+      console.log(compareTable.toString());
+      const shouldMatch = await confirm({
+        message: "确认以上对比后提交匹配？",
+        default: durationDiffMs <= 3000 && (sizeDiffBytes === undefined || sizeDiffBytes <= 1024 * 1024)
+      });
+      if (!shouldMatch) {
+        console.log(chalk.gray("你已取消本次匹配。"));
+        continue;
+      }
+      await app.cloudService.matchSong(target.songId, selectedSong.songId);
+      console.log(chalk.green(`匹配成功：sid=${target.songId} (CloudID=${target.cloudId}) -> SongID=${selectedSong.songId}`));
+    }
+
+    console.log(chalk.green("未匹配歌曲人工匹配流程结束。"));
   });
 
 program
