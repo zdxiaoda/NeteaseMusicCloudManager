@@ -11,6 +11,7 @@ import { openQrImageWithSystemDefault, showLoginQr } from "../infra/qr-display.j
 
 const program = new Command();
 const defaultBaseUrl = process.env.NCM_API_BASE_URL || "http://localhost:3000";
+// Keep query length bounded to avoid overly long prompt input and noisy search requests.
 const SEARCH_KEYWORD_MAX_LENGTH = 200;
 
 program.name("ncm-cloud").description("网易云音乐云盘歌曲管理 CLI").version("0.1.0");
@@ -217,14 +218,16 @@ program
       if (action === "quit") break;
       if (action === "skip") continue;
 
-      const keywords = (
+      const rawKeywords = (
         await input({
           message: "搜索关键词（默认：歌名 + 歌手）",
           default: defaultKeywords
         })
-      )
-        .trim()
-        .slice(0, SEARCH_KEYWORD_MAX_LENGTH);
+      ).trim();
+      const keywords = rawKeywords.slice(0, SEARCH_KEYWORD_MAX_LENGTH);
+      if (rawKeywords.length > SEARCH_KEYWORD_MAX_LENGTH) {
+        console.log(chalk.yellow(`关键词过长，已截断到 ${SEARCH_KEYWORD_MAX_LENGTH} 字符。`));
+      }
       const query = keywords || defaultKeywords;
       if (!query) {
         console.log(chalk.yellow("关键词为空，已跳过。"));

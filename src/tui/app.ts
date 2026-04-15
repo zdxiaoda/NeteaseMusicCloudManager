@@ -1009,9 +1009,7 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
         for (const [i, target] of unmatched.entries()) {
           const defaultKeywords = `${target.simpleSongName} ${target.artist}`.trim();
           output.log(
-            preferAscii
-              ? `[${i + 1}/${unmatched.length}] CloudID=${target.cloudId} ${target.simpleSongName} - ${target.artist}`
-              : `[${i + 1}/${unmatched.length}] CloudID=${target.cloudId} ${target.simpleSongName} - ${target.artist}`
+            `[${i + 1}/${unmatched.length}] CloudID=${target.cloudId} ${target.simpleSongName} - ${target.artist}`
           );
           const results = await app.cloudService.searchCloudSongs(defaultKeywords, searchLimit);
           if (!results.length) {

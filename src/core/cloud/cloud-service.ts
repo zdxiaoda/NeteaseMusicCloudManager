@@ -206,7 +206,7 @@ export class CloudService {
       .map((item) => ({
         songId: item.id,
         name: item.name || "",
-        artist: item.ar?.[0]?.name || "",
+        artist: item.ar?.map((artist) => artist.name).filter(Boolean).join(" / ") || "",
         album: item.al?.name || "",
         durationMs: item.dt || 0
       }));
