@@ -11,6 +11,7 @@ import { openQrImageWithSystemDefault, showLoginQr } from "../infra/qr-display.j
 
 const program = new Command();
 const defaultBaseUrl = process.env.NCM_API_BASE_URL || "http://localhost:3000";
+const SEARCH_KEYWORD_MAX_LENGTH = 200;
 
 program.name("ncm-cloud").description("网易云音乐云盘歌曲管理 CLI").version("0.1.0");
 
@@ -223,7 +224,7 @@ program
         })
       )
         .trim()
-        .slice(0, 200);
+        .slice(0, SEARCH_KEYWORD_MAX_LENGTH);
       const query = keywords || defaultKeywords;
       if (!query) {
         console.log(chalk.yellow("关键词为空，已跳过。"));
