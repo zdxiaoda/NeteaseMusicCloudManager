@@ -11,6 +11,7 @@ import { openQrImageWithSystemDefault, showLoginQr } from "../infra/qr-display.j
 
 const program = new Command();
 const defaultBaseUrl = process.env.NCM_API_BASE_URL || "http://localhost:3000";
+// Keep query length bounded to avoid overly long prompt input and noisy search requests.
 const SEARCH_KEYWORD_MAX_LENGTH = 200;
 
 program.name("ncm-cloud").description("网易云音乐云盘歌曲管理 CLI").version("0.1.0");
