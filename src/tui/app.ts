@@ -114,6 +114,10 @@ function formatTextTable(headers: string[], rows: string[][], widths: number[]):
   return [sep, renderRow(headers), sep, ...rows.map(renderRow), sep].join("\n");
 }
 
+function bytesToMb(bytes: number): number {
+  return bytes / (1024 * 1024);
+}
+
 function buildDiffDetailReport(diff: DiffResult, preferAscii: boolean, limit = 100): string {
   const sections: string[] = [];
   const take = <T,>(arr: T[]) => arr.slice(0, limit);
@@ -1011,7 +1015,21 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
           output.log(
             `[${i + 1}/${unmatched.length}] CloudID=${target.cloudId} ${target.simpleSongName} - ${target.artist}`
           );
-          const results = await app.cloudService.searchCloudSongs(defaultKeywords, searchLimit);
+          const inputKeywords = await askInput(
+            preferAscii ? "Search keywords (editable):" : "搜索关键词（可编辑）：",
+            { initialValue: defaultKeywords }
+          );
+          if (inputKeywords === undefined) {
+            output.log(preferAscii ? "Cancelled current song." : "已取消当前歌曲匹配。");
+            continue;
+          }
+          const query = (inputKeywords || defaultKeywords).trim();
+          if (!query) {
+            output.log(preferAscii ? "Empty keywords, skipped." : "关键词为空，已跳过。");
+            continue;
+          }
+          output.log(preferAscii ? `Searching: ${query}` : `搜索：${query}`);
+          const results = await app.cloudService.searchCloudSongs(query, searchLimit);
           if (!results.length) {
             output.log(preferAscii ? "No search results, skipped." : "搜索无结果，已跳过。");
             continue;
@@ -1025,7 +1043,7 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
             String(Math.round(row.durationMs / 1000))
           ]);
           await showViewer(
-            preferAscii ? `Search: ${defaultKeywords}` : `搜索：${defaultKeywords}`,
+            preferAscii ? `Search: ${query}` : `搜索：${query}`,
             formatTextTable(
               ["SongID", preferAscii ? "Song" : "歌曲名", preferAscii ? "Artist" : "歌手", preferAscii ? "Album" : "专辑", "Sec"],
               resultRows,
@@ -1052,12 +1070,49 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
             output.log(preferAscii ? "Invalid selection, skipped." : "选择无效，已跳过。");
             continue;
           }
+          const selectedSong = results.find((row) => row.songId === pickedSongId);
+          if (!selectedSong) {
+            output.log(preferAscii ? "Selected song not found, skipped." : "未找到所选歌曲信息，已跳过。");
+            continue;
+          }
           if (!target.songId || target.songId <= 0) {
             output.log(
               preferAscii
                 ? `Skipped: CloudID=${target.cloudId} has no cloud song sid, cannot call /cloud/match`
                 : `已跳过：CloudID=${target.cloudId} 缺少云盘歌曲 sid，无法调用 /cloud/match`
             );
+            continue;
+          }
+          const durationDiffMs = Math.abs((target.durationMs || 0) - (selectedSong.durationMs || 0));
+          const remoteSize = await app.cloudService.getSongRemoteFileSize(selectedSong.songId);
+          const sizeDiffBytes = remoteSize ? Math.abs(target.fileSize - remoteSize) : undefined;
+          await showViewer(
+            preferAscii ? "Match comparison" : "匹配前对比",
+            formatTextTable(
+              [preferAscii ? "Field" : "字段", preferAscii ? "Cloud" : "云盘歌曲", preferAscii ? "Candidate" : "候选歌曲", preferAscii ? "Diff" : "差异"],
+              [
+                [
+                  preferAscii ? "Duration(s)" : "时长(s)",
+                  String(Math.round(target.durationMs / 1000)),
+                  String(Math.round(selectedSong.durationMs / 1000)),
+                  (durationDiffMs / 1000).toFixed(1)
+                ],
+                [
+                  preferAscii ? "Size(MB)" : "大小(MB)",
+                  bytesToMb(target.fileSize).toFixed(2),
+                  remoteSize ? bytesToMb(remoteSize).toFixed(2) : preferAscii ? "Unknown" : "未知",
+                  sizeDiffBytes ? bytesToMb(sizeDiffBytes).toFixed(2) : preferAscii ? "Unknown" : "未知"
+                ]
+              ],
+              [12, 14, 14, 14]
+            ),
+            { preserveFormatting: true }
+          );
+          const shouldMatch = await askYesNo(
+            preferAscii ? "Submit match with this candidate?" : "确认按此候选提交匹配吗？"
+          );
+          if (!shouldMatch) {
+            output.log(preferAscii ? "Skipped by confirmation." : "你取消了本次匹配。");
             continue;
           }
           await app.cloudService.matchSong(target.songId, pickedSongId);
