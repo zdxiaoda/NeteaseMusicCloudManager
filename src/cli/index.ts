@@ -218,14 +218,16 @@ program
       if (action === "quit") break;
       if (action === "skip") continue;
 
-      const keywords = (
+      const rawKeywords = (
         await input({
           message: "搜索关键词（默认：歌名 + 歌手）",
           default: defaultKeywords
         })
-      )
-        .trim()
-        .slice(0, SEARCH_KEYWORD_MAX_LENGTH);
+      ).trim();
+      const keywords = rawKeywords.slice(0, SEARCH_KEYWORD_MAX_LENGTH);
+      if (rawKeywords.length > SEARCH_KEYWORD_MAX_LENGTH) {
+        console.log(chalk.yellow(`关键词过长，已截断到 ${SEARCH_KEYWORD_MAX_LENGTH} 字符。`));
+      }
       const query = keywords || defaultKeywords;
       if (!query) {
         console.log(chalk.yellow("关键词为空，已跳过。"));
