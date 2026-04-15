@@ -172,17 +172,24 @@ export class CloudService {
     }
   }
 
-  async matchSong(cloudId: number, songId: number): Promise<void> {
+  async matchSong(cloudSongId: number, songId: number): Promise<void> {
     const uid = this.sessionStore.getSession().userId;
     if (!uid) {
       throw new Error("当前会话缺少 uid，请重新登录后再执行云盘匹配");
     }
-    await this.apiClient.get("/cloud/match", { uid, sid: cloudId, asid: songId });
+    if (!Number.isFinite(cloudSongId) || cloudSongId <= 0) {
+      throw new Error("云盘歌曲 songId(sid) 必须是大于 0 的数字");
+    }
+    // asid=0 can be used to cancel an existing match.
+    if (!Number.isFinite(songId) || songId < 0) {
+      throw new Error("songId 必须是大于等于 0 的数字");
+    }
+    await this.apiClient.get("/cloud/match", { uid, sid: cloudSongId, asid: songId });
   }
 
   async getUnmatchedCloudSongs(forceRefresh = false): Promise<CloudSong[]> {
     const songs = await this.getCloudSongs(forceRefresh);
-    return songs.filter((song) => !song.songId || song.songId <= 0);
+    return songs.filter((song) => !song.album.trim());
   }
 
   async searchCloudSongs(keywords: string, limit = 10): Promise<SearchSong[]> {
@@ -250,7 +257,7 @@ export class CloudService {
           fileName: item.fileName,
           simpleSongName: item.simpleSong?.name ?? item.songName,
           artist: item.artist ?? item.simpleSong?.ar?.[0]?.name ?? "未知歌手",
-          album: item.album ?? item.simpleSong?.al?.name ?? "未知专辑",
+          album: (item.album ?? "").trim(),
           durationMs: item.simpleSong?.dt ?? 0,
           addTime: item.addTime,
           fileSize: item.fileSize,

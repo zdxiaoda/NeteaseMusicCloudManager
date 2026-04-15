@@ -159,13 +159,13 @@ program
 
 program
   .command("cloud:match")
-  .argument("<cloudId>", "云盘歌曲 cloudId")
+  .argument("<cloudSongId>", "云盘歌曲 songId（/cloud/match 的 sid）")
   .argument("<songId>", "目标歌曲 songId")
   .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
   .description("执行云盘歌曲匹配")
-  .action(async (cloudId: string, songId: string, opts) => {
+  .action(async (cloudSongId: string, songId: string, opts) => {
     const app = await withAppReady(opts.baseUrl);
-    await app.cloudService.matchSong(Number(cloudId), Number(songId));
+    await app.cloudService.matchSong(Number(cloudSongId), Number(songId));
     console.log(chalk.green("匹配请求已提交"));
   });
 
@@ -262,8 +262,12 @@ program
         console.log(chalk.gray("已跳过。"));
         continue;
       }
-      await app.cloudService.matchSong(target.cloudId, Number(selected));
-      console.log(chalk.green(`匹配成功：CloudID=${target.cloudId} -> SongID=${selected}`));
+      if (!target.songId || target.songId <= 0) {
+        console.log(chalk.yellow(`跳过：CloudID=${target.cloudId} 缺少云盘歌曲 songId(sid)，无法调用 /cloud/match`));
+        continue;
+      }
+      await app.cloudService.matchSong(target.songId, Number(selected));
+      console.log(chalk.green(`匹配成功：sid=${target.songId} (CloudID=${target.cloudId}) -> SongID=${selected}`));
     }
 
     console.log(chalk.green("未匹配歌曲人工匹配流程结束。"));

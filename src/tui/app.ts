@@ -1054,11 +1054,19 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
             output.log(preferAscii ? "Invalid selection, skipped." : "选择无效，已跳过。");
             continue;
           }
-          await app.cloudService.matchSong(target.cloudId, pickedSongId);
+          if (!target.songId || target.songId <= 0) {
+            output.log(
+              preferAscii
+                ? `Skipped: CloudID=${target.cloudId} has no cloud song sid, cannot call /cloud/match`
+                : `已跳过：CloudID=${target.cloudId} 缺少云盘歌曲 sid，无法调用 /cloud/match`
+            );
+            continue;
+          }
+          await app.cloudService.matchSong(target.songId, pickedSongId);
           output.log(
             preferAscii
-              ? `Matched CloudID=${target.cloudId} -> SongID=${pickedSongId}`
-              : `匹配成功：CloudID=${target.cloudId} -> SongID=${pickedSongId}`
+              ? `Matched sid=${target.songId} (CloudID=${target.cloudId}) -> SongID=${pickedSongId}`
+              : `匹配成功：sid=${target.songId} (CloudID=${target.cloudId}) -> SongID=${pickedSongId}`
           );
           screen.render();
         }
