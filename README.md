@@ -125,6 +125,7 @@ npm run dev -- cloud:list --refresh
 npm run dev -- cloud:upload "/path/to/song.flac"
 npm run dev -- cloud:delete 123 456
 npm run dev -- cloud:match 123 987654
+npm run dev -- cloud:match:unmatched --refresh
 npm run dev -- cloud:download 123 "/path/to/download-dir"
 ```
 
@@ -138,6 +139,7 @@ npm run dev -- cloud:download 123 "/path/to/download-dir"
   - `song`
   - `artist`
   - `album`
+- `cloud:match:unmatched` 会先筛选云盘未匹配歌曲（`songId` 为空），再逐首用“歌名 + 歌手”搜索并让你选择对应歌曲，也可跳过不匹配
 
 ### 本地扫描与差异分析
 
@@ -207,6 +209,7 @@ npm run dev:tui
 - `Tab` 在菜单和输入区切换
 - `Esc` 可快速把焦点拉回菜单
 - `q` / `Ctrl+C` 退出
+- 菜单 `12` 可进入“未匹配云盘歌曲逐首匹配”，流程与 CLI 一致（自动按“歌名 + 歌手”搜索，可逐首跳过）
 
 ---
 

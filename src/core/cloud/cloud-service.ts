@@ -6,7 +6,7 @@ import { parseFile } from "music-metadata";
 import { ApiClient } from "../../infra/api/client.js";
 import { CacheRepo } from "../../infra/db/cache-repo.js";
 import { SessionStore } from "../../infra/config/session-store.js";
-import { CloudSong } from "../types.js";
+import { CloudSong, SearchSong } from "../types.js";
 
 interface CloudListResponse {
   data: Array<{
@@ -41,6 +41,18 @@ interface CloudListResponse {
 
 interface SongUrlResponse {
   data: Array<{ url?: string }>;
+}
+
+interface CloudSearchResponse {
+  result?: {
+    songs?: Array<{
+      id: number;
+      name: string;
+      ar?: Array<{ name: string }>;
+      al?: { name?: string };
+      dt?: number;
+    }>;
+  };
 }
 
 interface UploadTokenResponse {
@@ -166,6 +178,31 @@ export class CloudService {
       throw new Error("当前会话缺少 uid，请重新登录后再执行云盘匹配");
     }
     await this.apiClient.get("/cloud/match", { uid, sid: cloudId, asid: songId });
+  }
+
+  async getUnmatchedCloudSongs(forceRefresh = false): Promise<CloudSong[]> {
+    const songs = await this.getCloudSongs(forceRefresh);
+    return songs.filter((song) => !song.songId || song.songId <= 0);
+  }
+
+  async searchCloudSongs(keywords: string, limit = 10): Promise<SearchSong[]> {
+    const trimmed = keywords.trim();
+    if (!trimmed) return [];
+    const response = await this.apiClient.get<CloudSearchResponse>("/cloudsearch", {
+      keywords: trimmed,
+      type: 1,
+      limit: Math.max(1, limit),
+      offset: 0
+    });
+    return (response.result?.songs || [])
+      .filter((item) => Boolean(item?.id))
+      .map((item) => ({
+        songId: item.id,
+        name: item.name || "未知歌曲",
+        artist: item.ar?.[0]?.name || "未知歌手",
+        album: item.al?.name || "未知专辑",
+        durationMs: item.dt || 0
+      }));
   }
 
   async getSongDownloadUrl(songId: number): Promise<string> {

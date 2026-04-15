@@ -169,6 +169,106 @@ program
   });
 
 program
+  .command("cloud:match:unmatched")
+  .option("--refresh", "执行前刷新云盘列表")
+  .option("--search-limit <n>", "每首歌展示的搜索结果数（默认 10）", "10")
+  .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
+  .description("筛选云盘未匹配歌曲并逐首人工匹配")
+  .action(async (opts) => {
+    const app = await withAppReady(opts.baseUrl);
+    const spinner = ora("加载未匹配云盘歌曲...").start();
+    const unmatched = await app.cloudService.getUnmatchedCloudSongs(Boolean(opts.refresh));
+    spinner.stop();
+    if (!unmatched.length) {
+      console.log(chalk.green("当前云盘中没有未匹配歌曲。"));
+      return;
+    }
+
+    console.log(chalk.yellow(`发现未匹配歌曲 ${unmatched.length} 首。`));
+    const previewTable = new Table({
+      head: ["CloudID", "文件名", "歌曲名", "歌手"],
+      colWidths: [12, 30, 30, 24]
+    });
+    for (const song of unmatched.slice(0, 100)) {
+      previewTable.push([song.cloudId, song.fileName, song.simpleSongName, song.artist]);
+    }
+    console.log(previewTable.toString());
+    if (unmatched.length > 100) {
+      console.log(chalk.gray(`仅展示前 100 首，实际 ${unmatched.length} 首。`));
+    }
+
+    const proceed = await confirm({ message: "开始逐首匹配？" });
+    if (!proceed) return;
+
+    const parsedLimit = Number(opts.searchLimit);
+    const searchLimit = Number.isFinite(parsedLimit) ? Math.max(1, parsedLimit) : 10;
+    for (const [i, target] of unmatched.entries()) {
+      const defaultKeywords = `${target.simpleSongName} ${target.artist}`.trim();
+      console.log(chalk.cyan(`\n[${i + 1}/${unmatched.length}] CloudID=${target.cloudId} ${target.simpleSongName} - ${target.artist}`));
+      const action = await select({
+        message: "操作",
+        choices: [
+          { name: "搜索并选择匹配", value: "search" },
+          { name: "跳过这首", value: "skip" },
+          { name: "结束本次匹配", value: "quit" }
+        ]
+      });
+      if (action === "quit") break;
+      if (action === "skip") continue;
+
+      const keywords = (
+        await input({
+          message: "搜索关键词（默认：歌名 + 歌手）",
+          default: defaultKeywords
+        })
+      )
+        .trim()
+        .slice(0, 200);
+      const query = keywords || defaultKeywords;
+      if (!query) {
+        console.log(chalk.yellow("关键词为空，已跳过。"));
+        continue;
+      }
+
+      const searchSpinner = ora(`搜索：${query}`).start();
+      const results = await app.cloudService.searchCloudSongs(query, searchLimit);
+      searchSpinner.stop();
+      if (!results.length) {
+        console.log(chalk.yellow("无搜索结果，已跳过。"));
+        continue;
+      }
+
+      const resultTable = new Table({
+        head: ["序号", "SongID", "歌曲名", "歌手", "专辑", "时长(s)"],
+        colWidths: [8, 10, 24, 18, 20, 10]
+      });
+      for (const [idx, row] of results.entries()) {
+        resultTable.push([idx + 1, row.songId, row.name, row.artist, row.album, Math.round(row.durationMs / 1000)]);
+      }
+      console.log(resultTable.toString());
+
+      const selected = await select({
+        message: "选择对应歌曲（可不选）",
+        choices: [
+          ...results.map((row) => ({
+            name: `${row.name} - ${row.artist} (#${row.songId})`,
+            value: row.songId
+          })),
+          { name: "不选择（跳过）", value: 0 }
+        ]
+      });
+      if (!selected) {
+        console.log(chalk.gray("已跳过。"));
+        continue;
+      }
+      await app.cloudService.matchSong(target.cloudId, Number(selected));
+      console.log(chalk.green(`匹配成功：CloudID=${target.cloudId} -> SongID=${selected}`));
+    }
+
+    console.log(chalk.green("未匹配歌曲人工匹配流程结束。"));
+  });
+
+program
   .command("scan")
   .argument("<folder>", "本地音乐目录")
   .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
