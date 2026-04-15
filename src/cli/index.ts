@@ -4,13 +4,20 @@ import Table from "cli-table3";
 import cliProgress from "cli-progress";
 import { input, password, select, confirm } from "@inquirer/prompts";
 import chalk from "chalk";
-import ora from "ora";
 import { createApp } from "../bootstrap.js";
 import { ensureApiServer } from "../infra/api/api-server-manager.js";
 import { openQrImageWithSystemDefault, showLoginQr } from "../infra/qr-display.js";
 
 const program = new Command();
 const defaultBaseUrl = process.env.NCM_API_BASE_URL || "http://localhost:3000";
+
+const createStatus = (message: string) => {
+  console.log(chalk.cyan(message));
+  return {
+    succeed: (text: string) => console.log(chalk.green(text)),
+    fail: (text: string) => console.log(chalk.red(text))
+  };
+};
 
 program.name("ncm-cloud").description("网易云音乐云盘歌曲管理 CLI").version("0.1.0");
 
@@ -102,9 +109,9 @@ program
   .description("列出云盘歌曲")
   .action(async (opts) => {
     const app = await withAppReady(opts.baseUrl);
-    const spinner = ora("加载云盘歌曲...").start();
+    const status = createStatus("加载云盘歌曲...");
     const songs = await app.cloudService.getCloudSongs(Boolean(opts.refresh));
-    spinner.succeed(`共 ${songs.length} 首`);
+    status.succeed(`共 ${songs.length} 首`);
     const table = new Table({
       head: ["CloudID", "歌曲名", "歌手", "专辑", "时长(s)"],
       colWidths: [12, 30, 20, 20, 12]
@@ -175,10 +182,15 @@ program
   .description("扫描本地音乐并建立缓存")
   .action(async (folder: string, opts) => {
     const app = await withAppReady(opts.baseUrl);
-    const spinner = ora("扫描本地音乐...").start();
-    const songs = await app.localScanner.scan(folder);
-    app.sessionStore.setLocalScanPath(folder);
-    spinner.succeed(`扫描完成，共 ${songs.length} 首`);
+    const status = createStatus("扫描本地音乐...");
+    try {
+      const songs = await app.localScanner.scan(folder);
+      app.sessionStore.setLocalScanPath(folder);
+      status.succeed(`扫描完成，共 ${songs.length} 首`);
+    } catch (error) {
+      status.fail("扫描失败");
+      throw error;
+    }
   });
 
 program
