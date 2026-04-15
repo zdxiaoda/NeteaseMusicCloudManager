@@ -186,9 +186,9 @@ program
   .description("筛选云盘未匹配歌曲并逐首人工匹配")
   .action(async (opts) => {
     const app = await withAppReady(opts.baseUrl);
-    const spinner = ora("加载未匹配云盘歌曲...").start();
+    const loadStatus = createStatus("加载未匹配云盘歌曲...");
     const unmatched = await app.cloudService.getUnmatchedCloudSongs(Boolean(opts.refresh));
-    spinner.stop();
+    loadStatus.succeed(`加载完成，共 ${unmatched.length} 首未匹配歌曲`);
     if (!unmatched.length) {
       console.log(chalk.green("当前云盘中没有未匹配歌曲。"));
       return;
@@ -242,9 +242,9 @@ program
         continue;
       }
 
-      const searchSpinner = ora(`搜索：${query}`).start();
+      const searchStatus = createStatus(`搜索：${query}`);
       const results = await app.cloudService.searchCloudSongs(query, searchLimit);
-      searchSpinner.stop();
+      searchStatus.succeed(`搜索完成，共 ${results.length} 条结果`);
       if (!results.length) {
         console.log(chalk.yellow("无搜索结果，已跳过。"));
         continue;
