@@ -206,7 +206,7 @@ export class CloudService {
       .map((item) => ({
         songId: item.id,
         name: item.name || "",
-        artist: item.ar?.map((artist) => artist.name).filter(Boolean).join(" / ") || "",
+        artist: item.ar?.[0]?.name || "",
         album: item.al?.name || "",
         durationMs: item.dt || 0
       }));
@@ -219,6 +219,24 @@ export class CloudService {
       throw new Error(`未获取到 songId=${songId} 的下载地址`);
     }
     return url;
+  }
+
+  async getSongRemoteFileSize(songId: number): Promise<number | undefined> {
+    try {
+      const url = await this.getSongDownloadUrl(songId);
+      const response = await axios.head(url, {
+        timeout: 20000,
+        maxRedirects: 5,
+        validateStatus: (status) => status >= 200 && status < 400
+      });
+      const raw = response.headers["content-length"];
+      const value = Array.isArray(raw) ? raw[0] : raw;
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+      return parsed;
+    } catch {
+      return undefined;
+    }
   }
 
   async downloadCloudSong(song: CloudSong, targetDir: string): Promise<string> {
