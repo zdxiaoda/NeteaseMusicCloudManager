@@ -198,9 +198,9 @@ export class CloudService {
       .filter((item) => Boolean(item?.id))
       .map((item) => ({
         songId: item.id,
-        name: item.name || "未知歌曲",
-        artist: item.ar?.[0]?.name || "未知歌手",
-        album: item.al?.name || "未知专辑",
+        name: item.name || "",
+        artist: item.ar?.[0]?.name || "",
+        album: item.al?.name || "",
         durationMs: item.dt || 0
       }));
   }

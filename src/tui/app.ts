@@ -1013,8 +1013,7 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
               ? `[${i + 1}/${unmatched.length}] CloudID=${target.cloudId} ${target.simpleSongName} - ${target.artist}`
               : `[${i + 1}/${unmatched.length}] CloudID=${target.cloudId} ${target.simpleSongName} - ${target.artist}`
           );
-          const query = defaultKeywords;
-          const results = await app.cloudService.searchCloudSongs(query, searchLimit);
+          const results = await app.cloudService.searchCloudSongs(defaultKeywords, searchLimit);
           if (!results.length) {
             output.log(preferAscii ? "No search results, skipped." : "搜索无结果，已跳过。");
             continue;
@@ -1028,7 +1027,7 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
             String(Math.round(row.durationMs / 1000))
           ]);
           await showViewer(
-            preferAscii ? `Search: ${query}` : `搜索：${query}`,
+            preferAscii ? `Search: ${defaultKeywords}` : `搜索：${defaultKeywords}`,
             formatTextTable(
               ["SongID", preferAscii ? "Song" : "歌曲名", preferAscii ? "Artist" : "歌手", preferAscii ? "Album" : "专辑", "Sec"],
               resultRows,

@@ -258,7 +258,7 @@ program
           { name: "不选择（跳过）", value: 0 }
         ]
       });
-      if (!selected) {
+      if (selected === 0) {
         console.log(chalk.gray("已跳过。"));
         continue;
       }
