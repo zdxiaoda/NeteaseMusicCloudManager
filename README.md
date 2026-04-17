@@ -13,10 +13,18 @@
 
 ---
 
+## 0. 软件截图
+
+![Command-Line Interface](https://github.com/zdxiaoda/NeteaseMusicCloudManager/assets/CLI.png)
+
+![TUI](https://github.com/zdxiaoda/NeteaseMusicCloudManager/assets/TUI.png)
+
+---
+
 ## 1. 环境要求
 
 - Node.js 18+
-- pnpm 10+（可通过 `corepack enable` 启用）
+- pnpm 10+
 - 可访问网易云 API 服务（本项目默认会自动尝试拉起）
 
 ---
@@ -103,8 +111,8 @@ NCM_API_BASE_URL=http://127.0.0.1:3000
 常用命令：
 
 ```bash
-npm run dev -- login
-npm run dev -- status
+pnpm run dev -- login
+pnpm run dev -- status
 ```
 
 二维码展示兜底顺序：
@@ -121,12 +129,12 @@ npm run dev -- status
 ### 云盘管理
 
 ```bash
-npm run dev -- cloud:list --refresh
-npm run dev -- cloud:upload "/path/to/song.flac"
-npm run dev -- cloud:delete 123 456
-npm run dev -- cloud:match 123 987654
-npm run dev -- cloud:match:unmatched --refresh
-npm run dev -- cloud:download 123 "/path/to/download-dir"
+pnpm run dev -- cloud:list --refresh
+pnpm run dev -- cloud:upload "/path/to/song.flac"
+pnpm run dev -- cloud:delete 123 456
+pnpm run dev -- cloud:match 123 987654
+pnpm run dev -- cloud:match:unmatched --refresh
+pnpm run dev -- cloud:download 123 "/path/to/download-dir"
 ```
 
 说明：
@@ -144,28 +152,28 @@ npm run dev -- cloud:download 123 "/path/to/download-dir"
 ### 本地扫描与差异分析
 
 ```bash
-npm run dev -- scan "/path/to/music-folder"
-npm run dev -- diff --limit 100
-npm run dev -- diff --all
+pnpm run dev -- scan "/path/to/music-folder"
+pnpm run dev -- diff --limit 100
+pnpm run dev -- diff --all
 ```
 
 ### 同步
 
 ```bash
 # 同步云盘端：删除云盘独有 + 上传本地独有
-npm run dev -- sync --target cloud
+pnpm run dev -- sync --target cloud
 
 # 同步本地端：删除本地独有
-npm run dev -- sync --target local --delete-local-only
+pnpm run dev -- sync --target local --delete-local-only
 
 # 同步本地端：下载云盘独有
-npm run dev -- sync --target local --download-cloud-only --download-dir "/path/to/dir"
+pnpm run dev -- sync --target local --download-cloud-only --download-dir "/path/to/dir"
 
 # 音质更新：匹配歌曲中，文件大小差异 > 3MB 执行“删云端+重传”
-npm run dev -- sync --target quality-update
+pnpm run dev -- sync --target quality-update
 
 # 自定义阈值（MB）
-npm run dev -- sync --target quality-update --quality-threshold-mb 6
+pnpm run dev -- sync --target quality-update --quality-threshold-mb 6
 ```
 
 同步说明：
@@ -200,7 +208,7 @@ npm run dev -- sync --target quality-update --quality-threshold-mb 6
 启动：
 
 ```bash
-npm run dev:tui
+pnpm run dev:tui
 ```
 
 操作要点：
@@ -231,9 +239,9 @@ npm run dev:tui
 先执行一次全流程：
 
 ```bash
-npm run dev -- scan "/your/music/folder"
-npm run dev -- cloud:list --refresh
-npm run dev -- diff --all
+pnpm run dev -- scan "/your/music/folder"
+pnpm run dev -- cloud:list --refresh
+pnpm run dev -- diff --all
 ```
 
 确认扫描目录与缓存都已更新。
