@@ -15,9 +15,9 @@
 
 ## 0. 软件截图
 
-![Command-Line Interface](https://github.com/zdxiaoda/NeteaseMusicCloudManager/assets/CLI.png)
+![Command-Line Interface](https://github.com/zdxiaoda/NeteaseMusicCloudManager/blob/main/assets/CLI.png?raw=true)
 
-![TUI](https://github.com/zdxiaoda/NeteaseMusicCloudManager/assets/TUI.png)
+![TUI](https://github.com/zdxiaoda/NeteaseMusicCloudManager/blob/main/assets/TUI.png?raw=true)
 
 ---
 
