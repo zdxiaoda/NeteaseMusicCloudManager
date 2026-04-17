@@ -120,6 +120,31 @@ export function openQrImageWithSystemDefault(dataUri: string): boolean {
   }
 }
 
+export function openUrl(url: string): boolean {
+  try {
+    if (process.platform === "win32") {
+      const shell = process.env.ComSpec || "cmd.exe";
+      const res = spawnSync(shell, ["/c", "start", "", url], {
+        stdio: "ignore",
+        windowsHide: true
+      });
+      return res.status === 0;
+    }
+    if (process.platform === "darwin") {
+      const res = spawnSync("open", [url], { stdio: "ignore" });
+      return res.status === 0;
+    }
+    if (process.platform === "linux") {
+      if (!commandExists("xdg-open")) return false;
+      const res = spawnSync("xdg-open", [url], { stdio: "ignore" });
+      return res.status === 0;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export function showLoginQr(
   dataUri: string,
   options: {

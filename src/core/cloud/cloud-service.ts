@@ -192,6 +192,22 @@ export class CloudService {
     return songs.filter((song) => !song.album.trim());
   }
 
+  async getSongDetail(songId: number): Promise<SearchSong | null> {
+    if (!songId || songId <= 0) return null;
+    const response = await this.apiClient.get<{ songs: any[] }>("/song/detail", {
+      ids: songId.toString()
+    });
+    const item = response.songs?.[0];
+    if (!item || !item.id) return null;
+    return {
+      songId: item.id,
+      name: item.name || "",
+      artist: item.ar?.[0]?.name || item.artists?.[0]?.name || "",
+      album: item.al?.name || item.album?.name || "",
+      durationMs: item.dt || item.duration || 0
+    };
+  }
+
   async searchCloudSongs(keywords: string, limit = 10): Promise<SearchSong[]> {
     const trimmed = keywords.trim();
     if (!trimmed) return [];

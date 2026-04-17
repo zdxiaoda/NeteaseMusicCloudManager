@@ -219,12 +219,67 @@ program
         message: "操作",
         choices: [
           { name: "搜索并选择匹配", value: "search" },
+          { name: "手动输入 SongID 匹配", value: "manual" },
           { name: "跳过这首", value: "skip" },
           { name: "结束本次匹配", value: "quit" }
         ]
       });
       if (action === "quit") break;
       if (action === "skip") continue;
+
+      if (action === "manual") {
+        const inputId = await input({ message: "请输入目标 SongID：" });
+        const targetSongId = Number(inputId.trim());
+        if (!Number.isFinite(targetSongId) || targetSongId <= 0) {
+          console.log(chalk.red("无效的 SongID，已跳过。"));
+          continue;
+        }
+
+        const songDetailStatus = createStatus(`获取歌曲详情：${targetSongId}`);
+        const result = await app.cloudService.getSongDetail(targetSongId);
+        if (!result) {
+          songDetailStatus.fail("未找到对应歌曲，已跳过。");
+          continue;
+        }
+        songDetailStatus.succeed(`获取成功：${result.name} - ${result.artist}`);
+
+        if (!target.songId || target.songId <= 0) {
+          console.log(chalk.yellow(`跳过：CloudID=${target.cloudId} 缺少云盘歌曲 songId(sid)，无法调用 /cloud/match`));
+          continue;
+        }
+
+        const durationDiffMs = Math.abs((target.durationMs || 0) - (result.durationMs || 0));
+        const remoteSize = await app.cloudService.getSongRemoteFileSize(result.songId);
+        const sizeDiffBytes = remoteSize ? Math.abs(target.fileSize - remoteSize) : undefined;
+        const compareTable = new Table({
+          head: ["字段", "云盘歌曲", "目标歌曲", "差异"],
+          colWidths: [10, 18, 18, 18]
+        });
+        compareTable.push([
+          "时长(s)",
+          Math.round(target.durationMs / 1000),
+          Math.round(result.durationMs / 1000),
+          (durationDiffMs / 1000).toFixed(1)
+        ]);
+        compareTable.push([
+          "大小(MB)",
+          bytesToMb(target.fileSize).toFixed(2),
+          remoteSize ? bytesToMb(remoteSize).toFixed(2) : "未知",
+          sizeDiffBytes ? bytesToMb(sizeDiffBytes).toFixed(2) : "未知"
+        ]);
+        console.log(compareTable.toString());
+        const shouldMatch = await confirm({
+          message: "确认以上对比后提交匹配？",
+          default: durationDiffMs <= 3000 && (sizeDiffBytes === undefined || sizeDiffBytes <= 1024 * 1024)
+        });
+        if (!shouldMatch) {
+          console.log(chalk.gray("你已取消本次匹配。"));
+          continue;
+        }
+        await app.cloudService.matchSong(target.songId, result.songId);
+        console.log(chalk.green(`匹配成功：sid=${target.songId} (CloudID=${target.cloudId}) -> SongID=${result.songId}`));
+        continue;
+      }
 
       console.log(chalk.gray(`建议关键词：${defaultKeywords || "(空)"}`));
       const rawKeywords = (

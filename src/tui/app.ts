@@ -1,7 +1,7 @@
 import blessed from "blessed";
 import { createApp } from "../bootstrap.js";
 import { openQrImageWithSystemDefault, showLoginQr } from "../infra/qr-display.js";
-import type { DiffResult } from "../core/types.js";
+import type { SearchSong, DiffResult } from "../core/types.js";
 
 interface TuiOptions {
   ascii?: boolean;
@@ -666,7 +666,11 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
         })
     );
 
-  const askChoice = <T extends string>(label: string, choices: Array<{ label: string; value: T }>): Promise<T | undefined> =>
+  const askChoice = <T extends string>(
+    label: string,
+    choices: Array<{ label: string; value: T }>,
+    extraKeys?: { key: string | string[]; handler: (value: T) => void }[]
+  ): Promise<T | undefined> =>
     withModal(
       (restoreFocus) =>
         new Promise((resolve) => {
@@ -688,6 +692,11 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
             choiceModalList.removeListener("select", onSelect);
             choiceModalList.removeListener("cancel", onCancel);
             choiceModalList.unkey("escape", onEscape);
+            if (extraKeys) {
+              for (const { key } of extraKeys) {
+                choiceModalList.unkey(key as any, onExtraKey(key));
+              }
+            }
             restoreFocus();
             resolve(value);
           };
@@ -695,9 +704,31 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
           const onCancel = () => finish(undefined);
           const onEscape = () => finish(undefined);
 
+          const extraKeyMap = new Map<string, (ch: any, key: any) => void>();
+          const onExtraKey = (key: string | string[]) => {
+            const keyStr = Array.isArray(key) ? key.join(",") : key;
+            if (!extraKeyMap.has(keyStr)) {
+              extraKeyMap.set(keyStr, () => {
+                if (settled) return;
+                const idx = (choiceModalList as any).selected as number;
+                const val = choices[idx]?.value;
+                if (val !== undefined && extraKeys) {
+                  const item = extraKeys.find(e => e.key === key);
+                  if (item) item.handler(val);
+                }
+              });
+            }
+            return extraKeyMap.get(keyStr)!;
+          };
+
           choiceModalList.once("select", onSelect);
           choiceModalList.once("cancel", onCancel);
           choiceModalList.key("escape", onEscape);
+          if (extraKeys) {
+            for (const { key } of extraKeys) {
+              choiceModalList.key(key as any, onExtraKey(key));
+            }
+          }
         })
     );
 
@@ -1053,28 +1084,72 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
           );
 
           const choose = await askChoice(
-            preferAscii ? "Select match result" : "选择匹配结果",
+            preferAscii ? "Select match result (press 'o' to open in browser)" : "选择匹配结果（按 'o' 即可在浏览器打开该歌曲页面）",
             [
               ...results.map((row) => ({
                 label: `${row.name} - ${row.artist} (#${row.songId})`,
                 value: `pick:${row.songId}` as const
               })),
+              { label: preferAscii ? "Enter SongID manually" : "手动输入 SongID 匹配", value: "manual" as const },
               { label: preferAscii ? "Skip this song" : "跳过这首", value: "skip" as const },
               { label: preferAscii ? "End matching" : "结束匹配", value: "stop" as const }
+            ],
+            [
+              {
+                key: "o",
+                handler: async (val) => {
+                  if (val.startsWith("pick:")) {
+                    const songId = val.replace("pick:", "");
+                    const url = `https://music.163.com/#/song?id=${songId}`;
+                    try {
+                      const { openUrl } = await import("../infra/qr-display.js");
+                      openUrl(url);
+                      output.log(preferAscii ? `Opened in browser: ${url}` : `已在浏览器打开：${url}`);
+                    } catch (err) {
+                      output.log(preferAscii ? "Failed to open browser" : "打开浏览器失败");
+                    }
+                  } else {
+                    output.log(preferAscii ? "Please select a song entry first" : "请先选择一个具体的歌曲条目");
+                  }
+                }
+              }
             ]
           );
           if (!choose || choose === "skip") continue;
           if (choose === "stop") break;
-          const pickedSongId = Number(choose.replace("pick:", ""));
-          if (!Number.isFinite(pickedSongId) || pickedSongId <= 0) {
-            output.log(preferAscii ? "Invalid selection, skipped." : "选择无效，已跳过。");
-            continue;
+
+          let selectedSong: SearchSong | undefined;
+          if (choose === "manual") {
+            const manualIdStr = await askInput(preferAscii ? "Enter SongID:" : "请输入目标 SongID：");
+            if (!manualIdStr) {
+              output.log(preferAscii ? "No ID entered, skipped." : "未输入 ID，已跳过。");
+              continue;
+            }
+            const manualId = Number(manualIdStr.trim());
+            if (!Number.isFinite(manualId) || manualId <= 0) {
+              output.log(preferAscii ? "Invalid SongID, skipped." : "无效的 SongID，已跳过。");
+              continue;
+            }
+            output.log(preferAscii ? `Fetching target song: ${manualId}` : `获取目标歌曲：${manualId}`);
+            selectedSong = (await app.cloudService.getSongDetail(manualId)) || undefined;
+            if (!selectedSong) {
+              output.log(preferAscii ? "Target song not found, skipped." : "未找到目标歌曲，已跳过。");
+              continue;
+            }
+            output.log(preferAscii ? `Found: ${selectedSong.name} - ${selectedSong.artist}` : `找到歌曲：${selectedSong.name} - ${selectedSong.artist}`);
+          } else {
+            const pickedSongId = Number(choose.replace("pick:", ""));
+            if (!Number.isFinite(pickedSongId) || pickedSongId <= 0) {
+              output.log(preferAscii ? "Invalid selection, skipped." : "选择无效，已跳过。");
+              continue;
+            }
+            selectedSong = results.find((row) => row.songId === pickedSongId);
+            if (!selectedSong) {
+              output.log(preferAscii ? "Selected song not found, skipped." : "未找到所选歌曲信息，已跳过。");
+              continue;
+            }
           }
-          const selectedSong = results.find((row) => row.songId === pickedSongId);
-          if (!selectedSong) {
-            output.log(preferAscii ? "Selected song not found, skipped." : "未找到所选歌曲信息，已跳过。");
-            continue;
-          }
+
           if (!target.songId || target.songId <= 0) {
             output.log(
               preferAscii
@@ -1115,11 +1190,11 @@ export async function startTui(baseUrl: string, options: TuiOptions = {}): Promi
             output.log(preferAscii ? "Skipped by confirmation." : "你取消了本次匹配。");
             continue;
           }
-          await app.cloudService.matchSong(target.songId, pickedSongId);
+          await app.cloudService.matchSong(target.songId, selectedSong.songId);
           output.log(
             preferAscii
-              ? `Matched sid=${target.songId} (CloudID=${target.cloudId}) -> SongID=${pickedSongId}`
-              : `匹配成功：sid=${target.songId} (CloudID=${target.cloudId}) -> SongID=${pickedSongId}`
+              ? `Matched sid=${target.songId} (CloudID=${target.cloudId}) -> SongID=${selectedSong.songId}`
+              : `匹配成功：sid=${target.songId} (CloudID=${target.cloudId}) -> SongID=${selectedSong.songId}`
           );
           screen.render();
         }
