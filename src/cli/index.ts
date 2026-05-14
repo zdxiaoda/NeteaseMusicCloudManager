@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 import { Command } from "commander";
 import Table from "cli-table3";
 import cliProgress from "cli-progress";
@@ -64,13 +64,11 @@ program
     } else {
       const qr = await app.authService.createQr();
       console.log(chalk.cyan("请扫码登录："));
-      const mode = showLoginQr(qr.qrimg, { allowSixel: true, writeRaw: (text) => console.log(text) });
-      if (mode === "sixel") {
-        console.log(chalk.gray("已在终端内显示二维码（Sixel）。"));
-      } else if (mode === "external") {
-        console.log(chalk.gray("已使用系统默认应用打开二维码图片。"));
+      const mode = await showLoginQr(qr.qrimg, { writeRaw: (text) => console.log(text) });
+      if (mode === "terminal" || mode === "utf8") {
+        console.log(chalk.gray("已在终端内显示二维码。"));
       } else {
-        console.log(chalk.yellow("无法在终端显示（Sixel）或系统打开图片，请手动复制以下 data URL 到浏览器："));
+        console.log(chalk.yellow("无法在终端显示二维码，请手动复制以下 data URL 到浏览器："));
         console.log(qr.qrimg);
       }
       const qrFallbackAction = (await input({
@@ -567,7 +565,6 @@ program
 program
   .command("tui")
   .option("--base-url <url>", "NeteaseCloudMusicApiEnhanced 地址")
-  .option("--ascii", "ASCII 降级模式（终端乱码时使用）")
   .description("启动全屏 TUI")
   .action(async (opts) => {
     const baseUrl = opts.baseUrl || defaultBaseUrl;
@@ -575,7 +572,7 @@ program
       await ensureApiServer(baseUrl);
     }
     const { startTui } = await import("../tui/app.js");
-    await startTui(baseUrl, { ascii: Boolean(opts.ascii) });
+    await startTui(baseUrl);
   });
 
 program.parseAsync(process.argv).catch((error) => {

@@ -1,43 +1,20 @@
 {
   "name": "neteasemusiccloudmanager",
-  "version": "1.3.0",
+  "version": "2.0.0",
   "description": "NetEase Cloud Music cloud disk manager CLI",
   "main": "dist/cli/index.js",
   "bin": {
-    "ncm-cloud": "dist/cli/index.js",
-    "ncm-cloud-tui": "dist/tui/index.js"
-  },
-  "pkg": {
-    "scripts": [
-      "dist-pkg/*.cjs",
-      "node_modules/@neteasecloudmusicapienhanced/api/**/*.js"
-    ],
-    "assets": [
-      "node_modules/@neteasecloudmusicapienhanced/api/**/*",
-      "node_modules/blessed/**/*"
-    ]
+    "ncm-cloud": "dist/cli/index.js"
   },
   "scripts": {
-    "dev": "tsx src/cli/index.ts",
-    "dev:tui": "tsx src/tui/index.ts",
+    "dev": "bun src/cli/index.ts",
+    "dev:tui": "bun src/cli/index.ts tui",
     "build": "tsc -p tsconfig.json",
-    "bundle:cli": "esbuild src/cli/index.ts --bundle --platform=node --format=cjs --target=node24 --outfile=dist-pkg/cli.cjs --external:blessed --external:term.js --external:pty.js --define:import.meta.url=__filename",
-    "bundle:tui": "esbuild src/tui/index.ts --bundle --platform=node --format=cjs --target=node24 --outfile=dist-pkg/tui.cjs --external:blessed --external:term.js --external:pty.js --define:import.meta.url=__filename",
-    "bundle:pkg": "npm run bundle:cli && npm run bundle:tui",
-    "pkg:cli:win": "pkg dist-pkg/cli.cjs --targets node24-win-x64 --output artifacts/ncm-cloud-win.exe",
-    "pkg:cli:linux": "pkg dist-pkg/cli.cjs --targets node24-linux-x64 --output artifacts/ncm-cloud-linux",
-    "pkg:cli:mac": "pkg dist-pkg/cli.cjs --targets node24-macos-x64 --output artifacts/ncm-cloud-macos",
-    "pkg:tui:win": "pkg dist-pkg/tui.cjs --targets node24-win-x64 --output artifacts/ncm-cloud-tui-win.exe",
-    "pkg:tui:linux": "pkg dist-pkg/tui.cjs --targets node24-linux-x64 --output artifacts/ncm-cloud-tui-linux",
-    "pkg:tui:mac": "pkg dist-pkg/tui.cjs --targets node24-macos-x64 --output artifacts/ncm-cloud-tui-macos",
-    "pkg:win": "npm run pkg:cli:win && npm run pkg:tui:win",
-    "pkg:linux": "npm run pkg:cli:linux && npm run pkg:tui:linux",
-    "pkg:mac": "npm run pkg:cli:mac && npm run pkg:tui:mac",
-    "pkg:all": "npm run pkg:win && npm run pkg:linux && npm run pkg:mac",
-    "build:exe": "npm run build && npm run bundle:pkg && npm run pkg:all",
-    "start": "node dist/cli/index.js",
-    "start:tui": "node dist/tui/index.js",
-    "typecheck": "tsc --noEmit"
+    "start": "bun dist/cli/index.js",
+    "start:tui": "bun dist/cli/index.js tui",
+    "typecheck": "tsc --noEmit",
+    "compile": "bun build src/cli/index.ts --compile --outfile artifacts/ncm-cloud",
+    "compile:all": "bun run compile"
   },
   "keywords": [],
   "author": "",
@@ -46,8 +23,9 @@
   "dependencies": {
     "@inquirer/prompts": "^8.4.1",
     "@neteasecloudmusicapienhanced/api": "^4.31.0",
+    "@opentui/core": "^0.2.9",
+    "@vincentkoc/qrcode-tui": "^0.2.1",
     "axios": "^1.15.0",
-    "blessed": "^0.1.81",
     "chalk": "^5.6.2",
     "cli-progress": "^3.12.0",
     "cli-table3": "^0.6.5",
@@ -58,19 +36,12 @@
     "p-queue": "^9.1.2",
     "pino": "^10.3.1",
     "pino-pretty": "^13.1.3",
-    "pngjs": "^7.0.0",
-    "sixel": "^0.16.0",
     "string-similarity": "^4.0.4"
   },
   "devDependencies": {
-    "@types/blessed": "^0.1.27",
+    "@types/bun": "^1.2.0",
     "@types/cli-progress": "^3.11.6",
-    "@types/node": "^25.6.0",
-    "@types/pngjs": "^6.0.5",
     "@types/string-similarity": "^4.0.2",
-    "@yao-pkg/pkg": "^6.14.2",
-    "esbuild": "0.27.7",
-    "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   }
 }
