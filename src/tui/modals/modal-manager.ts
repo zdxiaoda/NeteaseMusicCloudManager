@@ -15,6 +15,7 @@ export interface ModalManager {
   askInput: (label: string, options?: { initialValue?: string }) => Promise<string | undefined>;
   askChoice: <T extends string>(label: string, choices: Array<{ label: string; value: T }>) => Promise<T | undefined>;
   showViewer: (title: string, content: string) => Promise<void>;
+  showQrCode: (qrText: string) => Promise<"open" | "close">;
   showTable: (title: string, table: BoxRenderable) => Promise<void>;
   askYesNo: (label: string) => Promise<boolean>;
   isActive: () => boolean;
@@ -267,6 +268,124 @@ export function createModalManager(renderer: CliRenderer, keyHandler: any): Moda
     ]).then((value) => value === "yes");
   };
 
+  const showQrCode = (qrText: string): Promise<"open" | "close"> => {
+    return new Promise((resolve) => {
+      const overlay = new BoxRenderable(renderer, {
+        id: "modal-overlay",
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 90,
+        backgroundColor: "#000000",
+        opacity: 0.6,
+      });
+
+      const box = new BoxRenderable(renderer, {
+        id: "modal-box",
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 100,
+        backgroundColor: THEME.bg,
+        flexDirection: "column",
+        padding: 2,
+        gap: 1,
+      });
+
+      // 标题
+      const title = new TextRenderable(renderer, {
+        id: "qr-title",
+        content: "══════════════════════  扫码登录  ══════════════════════",
+        fg: THEME.primary,
+      });
+      box.add(title);
+
+      // 二维码区域
+      const scrollBox = new ScrollBoxRenderable(renderer, {
+        id: "qr-scroll",
+        width: "100%",
+        flexGrow: 1,
+        backgroundColor: THEME.bgPanel,
+        borderStyle: "rounded",
+        borderColor: THEME.primary,
+      });
+
+      const lines = qrText.split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        scrollBox.add(
+          new TextRenderable(renderer, {
+            id: `qr-line-${i}`,
+            content: lines[i],
+            width: "100%",
+            fg: THEME.textBright,
+          })
+        );
+      }
+      box.add(scrollBox);
+
+      // 操作选项
+      const selectEl = new SelectRenderable(renderer, {
+        id: "qr-select",
+        width: "100%",
+        height: 5,
+        options: [
+          { name: " 使用系统图片查看器打开", description: "打开 PNG 二维码图片" },
+          { name: " 关闭", description: "关闭此窗口" },
+        ],
+        backgroundColor: THEME.bgPanel,
+        selectedBackgroundColor: THEME.selected,
+        selectedTextColor: THEME.selectedText,
+        textColor: THEME.text,
+        showDescription: true,
+      });
+      box.add(selectEl);
+
+      // 提示
+      const hint = new TextRenderable(renderer, {
+        id: "qr-hint",
+        content: "↑↓ 选择  Enter 确认  Esc 关闭",
+        fg: THEME.textMuted,
+      });
+      box.add(hint);
+
+      renderer.root.add(overlay);
+      renderer.root.add(box);
+      renderer.requestRender();
+      selectEl.focus();
+
+      activeModal = {
+        overlay,
+        box,
+        cleanup: () => {
+          overlay.destroy();
+          box.destroy();
+          renderer.requestRender();
+        },
+      };
+
+      const onFinish = (value: "open" | "close") => {
+        selectEl.removeAllListeners(SelectRenderableEvents.ITEM_SELECTED);
+        keyHandler.removeListener("keypress", onKey);
+        hideModal();
+        resolve(value);
+      };
+
+      selectEl.on(SelectRenderableEvents.ITEM_SELECTED, (index: number) => {
+        onFinish(index === 0 ? "open" : "close");
+      });
+
+      const onKey = (key: KeyEvent) => {
+        if (key.name === "escape") onFinish("close");
+      };
+
+      keyHandler.on("keypress", onKey);
+    });
+  };
+
   const showTable = (title: string, table: BoxRenderable): Promise<void> => {
     return new Promise((resolve) => {
       const content = new BoxRenderable(renderer, {
@@ -302,5 +421,5 @@ export function createModalManager(renderer: CliRenderer, keyHandler: any): Moda
     });
   };
 
-  return { askInput, askChoice, showViewer, showTable, askYesNo, isActive };
+  return { askInput, askChoice, showViewer, showQrCode, showTable, askYesNo, isActive };
 }

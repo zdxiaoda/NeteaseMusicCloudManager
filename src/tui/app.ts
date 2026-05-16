@@ -11,7 +11,6 @@ import { createLogPanel } from "./components/log-panel.js";
 import { createStatusBar } from "./components/status-bar.js";
 import { createModalManager } from "./modals/modal-manager.js";
 import { createActionHandlers } from "./actions/index.js";
-import { openQrImageWithSystemDefault, showLoginQr } from "../infra/qr-display.js";
 
 export async function startTui(baseUrl: string): Promise<void> {
   const app = createApp(baseUrl);

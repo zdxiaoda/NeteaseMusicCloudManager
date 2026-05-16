@@ -2,7 +2,7 @@ import type { LogPanel } from "../components/log-panel.js";
 import type { StatusBar } from "../components/status-bar.js";
 import type { ModalManager } from "../modals/modal-manager.js";
 import type { SearchSong, DiffResult } from "../../core/types.js";
-import { openQrImageWithSystemDefault, showLoginQr } from "../../infra/qr-display.js";
+import { openQrImageWithSystemDefault } from "../../infra/qr-display.js";
 import { MENU_ITEMS } from "../components/sidebar.js";
 import { createSongList, createDiffList } from "../components/table.js";
 import { BoxRenderable, type CliRenderer } from "@opentui/core";
@@ -85,33 +85,36 @@ export function createActionHandlers(
       const qr = await app.authService.createQr();
       logPanel.append("请使用二维码扫码登录", "info");
       
-      // 尝试在终端显示二维码
-      const mode = await showLoginQr(qr.qrurl, { 
-        writeRaw: (text) => {
-          // 将二维码文本添加到日志
-          logPanel.append(text);
+      // 尝试渲染二维码文本
+      let qrDisplayText: string | undefined;
+      try {
+        const { renderUtf8 } = await import("@vincentkoc/qrcode-tui");
+        qrDisplayText = await renderUtf8(qr.qrurl);
+      } catch (err) {
+        logPanel.append("二维码渲染失败", "error");
+      }
+      
+      if (qrDisplayText) {
+        // 显示二维码弹窗
+        const action = await modalManager.showQrCode(qrDisplayText);
+        if (action === "open") {
+          const opened = openQrImageWithSystemDefault(qr.qrimg);
+          logPanel.append(opened ? "已打开二维码图片" : "打开二维码图片失败", opened ? "success" : "error");
         }
-      });
-      
-      if (mode === "terminal" || mode === "utf8") {
-        logPanel.append("已在终端内显示二维码", "success");
       } else {
-        logPanel.append("无法在终端显示二维码", "warning");
+        // 降级：显示选项
+        const action = await modalManager.askChoice("二维码选项", [
+          { label: "使用系统图片查看器打开", value: "open" },
+          { label: "继续等待扫码", value: "wait" },
+          { label: "取消本次登录", value: "cancel" },
+        ]);
+        if (action === "cancel" || action === undefined) { logPanel.append("已取消", "info"); return; }
+        if (action === "open") {
+          const opened = openQrImageWithSystemDefault(qr.qrimg);
+          logPanel.append(opened ? "已打开二维码图片" : "打开二维码图片失败", opened ? "success" : "error");
+        }
       }
       
-      const action = await modalManager.askChoice("二维码选项", [
-        { label: "继续等待扫码", value: "wait" },
-        { label: "重新打开二维码图片", value: "open" },
-        { label: "查看二维码 URL", value: "url" },
-        { label: "取消本次登录", value: "cancel" },
-      ]);
-      if (action === "cancel" || action === undefined) { logPanel.append("已取消", "info"); return; }
-      if (action === "open") {
-        const opened = openQrImageWithSystemDefault(qr.qrimg);
-        logPanel.append(opened ? "已打开二维码图片" : "打开二维码图片失败", opened ? "success" : "error");
-      } else if (action === "url") {
-        await modalManager.showViewer("扫码登录 URL", qr.qrurl);
-      }
       statusBar.setLoading("等待扫码...");
       logPanel.append("等待扫码登录...", "info");
       const ok = await app.authService.waitQrLogin(qr.key);
