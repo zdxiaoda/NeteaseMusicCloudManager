@@ -1,51 +1,71 @@
 import axios from "axios";
 import { spawn, ChildProcess } from "node:child_process";
-import { createRequire } from "node:module";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const require = createRequire(import.meta.url);
-const processWithPkg = process as NodeJS.Process & {
-  pkg?: { defaultEntrypoint?: string };
-};
+import os from "node:os";
+import { getEmbeddedFiles, getApiFileName } from "./embedded-api.js";
 
 let serverProcess: ChildProcess | undefined;
+let extractedApiDir: string | undefined;
 
-function resolveApiAppPath(): string {
-  const candidates: string[] = [];
+const API_TEMP_DIR_NAME = "ncm-cloud-api";
 
-  try {
-    candidates.push(require.resolve("@neteasecloudmusicapienhanced/api/app.js"));
-  } catch {
-    // ignore and fallback to other resolution strategies
+function getTempApiDir(): string {
+  return path.join(os.tmpdir(), API_TEMP_DIR_NAME);
+}
+
+function ensureApiExtracted(): string {
+  if (extractedApiDir && existsSync(extractedApiDir)) {
+    return extractedApiDir;
   }
 
-  try {
-    const pkgJsonPath = require.resolve("@neteasecloudmusicapienhanced/api/package.json");
-    candidates.push(path.join(path.dirname(pkgJsonPath), "app.js"));
-  } catch {
-    // ignore and fallback to snapshot probing
+  const tempDir = getTempApiDir();
+  const markerFile = path.join(tempDir, ".extracted");
+
+  // 检查是否已解压且版本匹配
+  if (existsSync(markerFile)) {
+    extractedApiDir = tempDir;
+    return tempDir;
   }
 
-  const snapshotRoots = new Set<string>();
-  const currentFilePath = fileURLToPath(import.meta.url);
-  snapshotRoots.add(path.resolve(path.dirname(currentFilePath), "..", "..", ".."));
-  if (processWithPkg.pkg?.defaultEntrypoint) {
-    snapshotRoots.add(path.resolve(path.dirname(processWithPkg.pkg.defaultEntrypoint), ".."));
+  // 清理并重新创建
+  if (existsSync(tempDir)) {
+    try {
+      // 使用系统命令删除，更可靠
+      const { execSync } = require("child_process");
+      execSync(`rm -rf "${tempDir}"`, { timeout: 5000 });
+    } catch {
+      // 如果删除失败，使用新目录名
+      const newTempDir = path.join(os.tmpdir(), `${API_TEMP_DIR_NAME}-${Date.now()}`);
+      mkdirSync(newTempDir, { recursive: true });
+      extractedApiDir = newTempDir;
+      return extractFiles(newTempDir);
+    }
   }
 
-  for (const root of snapshotRoots) {
-    candidates.push(path.join(root, "node_modules/@neteasecloudmusicapienhanced/api/app.js"));
+  mkdirSync(tempDir, { recursive: true });
+  extractedApiDir = tempDir;
+  return extractFiles(tempDir);
+}
+
+function extractFiles(targetDir: string): string {
+  const files = getEmbeddedFiles();
+
+  for (const file of files) {
+    const filePath = path.join(targetDir, file.path);
+    const dir = path.dirname(filePath);
+
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
+
+    writeFileSync(filePath, file.content);
   }
 
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
-  }
+  // 写入标记文件
+  writeFileSync(path.join(targetDir, ".extracted"), Date.now().toString());
 
-  throw new Error(
-    "未找到内置 API 启动模块，请先手动启动 @neteasecloudmusicapienhanced/api，或设置 NCM_AUTO_START_API=0 关闭自动拉起。"
-  );
+  return targetDir;
 }
 
 function isLocalAddress(baseUrl: string): boolean {
@@ -94,10 +114,20 @@ export async function ensureApiServer(baseUrl: string): Promise<void> {
 
   const port = parsePort(baseUrl);
   const readyTimeoutMs = 60000;
-  const apiAppPath = resolveApiAppPath();
 
-  const proc = spawn(process.execPath, [apiAppPath], {
+  // 解压嵌入的 API 文件
+  const apiDir = ensureApiExtracted();
+  const apiAppPath = path.join(apiDir, getApiFileName());
+
+  if (!existsSync(apiAppPath)) {
+    throw new Error(
+      "未找到内置 API 启动模块，请先手动启动 @neteasecloudmusicapienhanced/api，或设置 NCM_AUTO_START_API=0 关闭自动拉起。"
+    );
+  }
+
+  const proc = spawn("node", [apiAppPath], {
     env: { ...process.env, PORT: port, NCM_LOG_LEVEL: "error" },
+    cwd: apiDir,
     stdio: "ignore",
     detached: true
   });

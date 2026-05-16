@@ -575,7 +575,24 @@ program
     await startTui(baseUrl);
   });
 
-program.parseAsync(process.argv).catch((error) => {
-  console.error(chalk.red(`执行失败: ${error.message}`));
-  process.exit(1);
-});
+// 无参数时默认启动 TUI（双击 exe 场景）
+const args = process.argv.slice(2);
+if (args.length === 0) {
+  (async () => {
+    try {
+      if (process.env.NCM_AUTO_START_API !== "0") {
+        await ensureApiServer(defaultBaseUrl);
+      }
+      const { startTui } = await import("../tui/app.js");
+      await startTui(defaultBaseUrl);
+    } catch (error: any) {
+      console.error(chalk.red(`启动失败: ${error.message}`));
+      process.exit(1);
+    }
+  })();
+} else {
+  program.parseAsync(process.argv).catch((error) => {
+    console.error(chalk.red(`执行失败: ${error.message}`));
+    process.exit(1);
+  });
+}
