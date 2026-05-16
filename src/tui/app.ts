@@ -9,6 +9,7 @@ import { THEME, LAYOUT } from "./styles/theme.js";
 import { createSidebar, MENU_ITEMS } from "./components/sidebar.js";
 import { createLogPanel } from "./components/log-panel.js";
 import { createStatusBar } from "./components/status-bar.js";
+import { createCatWidget } from "./components/cat.js";
 import { createModalManager } from "./modals/modal-manager.js";
 import { createActionHandlers } from "./actions/index.js";
 
@@ -29,9 +30,10 @@ export async function startTui(baseUrl: string): Promise<void> {
   const logPanel = createLogPanel(renderer);
   const statusBar = createStatusBar(renderer);
   const modalManager = createModalManager(renderer, keyHandler);
+  const catWidget = createCatWidget(renderer);
 
   // 创建操作处理器
-  const actions = createActionHandlers(app, renderer, logPanel, modalManager, statusBar);
+  const actions = createActionHandlers(app, renderer, logPanel, modalManager, statusBar, catWidget);
 
   // 创建侧边栏
   const sidebar = createSidebar(renderer, {

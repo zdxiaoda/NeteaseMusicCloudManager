@@ -1,5 +1,6 @@
 import type { LogPanel } from "../components/log-panel.js";
 import type { StatusBar } from "../components/status-bar.js";
+import type { CatWidget } from "../components/cat.js";
 import type { ModalManager } from "../modals/modal-manager.js";
 import type { SearchSong, DiffResult } from "../../core/types.js";
 import { openQrImageWithSystemDefault } from "../../infra/qr-display.js";
@@ -18,7 +19,8 @@ export function createActionHandlers(
   renderer: CliRenderer,
   logPanel: LogPanel,
   modalManager: ModalManager,
-  statusBar: StatusBar
+  statusBar: StatusBar,
+  catWidget: CatWidget
 ): ActionHandlers {
   let actionRunning = false;
 
@@ -30,14 +32,19 @@ export function createActionHandlers(
     actionRunning = true;
     const menuItem = MENU_ITEMS[index];
     if (menuItem) statusBar.setLoading(menuItem.name);
+    catWidget.setMood("curious");
 
     try {
       await executeAction(index);
+      catWidget.setMood("happy");
     } catch (error) {
       logPanel.append(`执行失败: ${(error as Error).message}`, "error");
+      catWidget.setMood("grumpy");
     } finally {
       actionRunning = false;
       statusBar.clearLoading();
+      // 3秒后恢复空闲状态
+      setTimeout(() => catWidget.setMood("idle"), 3000);
     }
   };
 
