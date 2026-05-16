@@ -311,8 +311,9 @@ export function createActionHandlers(
       const defaultKeywords = `${target.simpleSongName} ${target.artist}`.trim();
       logPanel.append(`[${i + 1}/${unmatched.length}] CloudID=${target.cloudId} ${target.simpleSongName} - ${target.artist}`);
       
+      // 在输入框标题中显示当前歌曲信息
       const inputKeywords = await modalManager.askInput(
-        `搜索关键词（${target.simpleSongName} - ${target.artist}）：`, 
+        `[${i + 1}/${unmatched.length}] ${target.simpleSongName} - ${target.artist}\n搜索关键词（可编辑）：`,
         { initialValue: defaultKeywords }
       );
       if (inputKeywords === undefined) { logPanel.append("已取消当前歌曲匹配", "info"); continue; }
