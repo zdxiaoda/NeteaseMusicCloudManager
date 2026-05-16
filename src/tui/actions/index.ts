@@ -310,6 +310,13 @@ export function createActionHandlers(
     for (const [i, target] of unmatched.entries()) {
       const defaultKeywords = `${target.simpleSongName} ${target.artist}`.trim();
       logPanel.append(`[${i + 1}/${unmatched.length}] CloudID=${target.cloudId} ${target.simpleSongName} - ${target.artist}`);
+      
+      // 显示当前歌曲信息
+      await modalManager.showViewer(
+        `正在匹配第 ${i + 1}/${unmatched.length} 首`,
+        `歌曲名: ${target.simpleSongName}\n歌手: ${target.artist}\n文件名: ${target.fileName}\nCloudID: ${target.cloudId}`
+      );
+      
       const inputKeywords = await modalManager.askInput("搜索关键词（可编辑）：", { initialValue: defaultKeywords });
       if (inputKeywords === undefined) { logPanel.append("已取消当前歌曲匹配", "info"); continue; }
       const query = (inputKeywords || defaultKeywords).trim();
