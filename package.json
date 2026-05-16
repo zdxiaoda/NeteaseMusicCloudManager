@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit",
     "generate:api": "bun scripts/generate-embedded-api.ts",
     "compile": "bun run generate:api && bun build src/cli/index.ts --compile --outfile artifacts/ncm-cloud",
-    "compile:win": "bun run generate:api && bun build src/cli/index.ts --compile --target=bun-windows-x64 --external @opentui/core --external @opentui/core-win32-x64 --outfile artifacts/ncm-cloud-win.exe",
+    "compile:win": "bun run generate:api && bun build src/cli/index.ts --compile --target=bun-windows-x64 --outfile artifacts/ncm-cloud-win.exe",
     "compile:linux": "bun run generate:api && bun build src/cli/index.ts --compile --target=bun-linux-x64 --outfile artifacts/ncm-cloud-linux"
   },
   "keywords": [],

@@ -577,8 +577,14 @@ program
     if (process.env.NCM_AUTO_START_API !== "0") {
       await ensureApiServer(baseUrl);
     }
-    const { startTui } = await import("../tui/app.js");
-    await startTui(baseUrl);
+    try {
+      const { startTui } = await import("../tui/app.js");
+      await startTui(baseUrl);
+    } catch (e: any) {
+      console.error(chalk.red("TUI 不可用，请安装依赖: npm install @opentui/core"));
+      console.error(chalk.gray(e.message));
+      process.exit(1);
+    }
   });
 
 // 无参数时默认启动 TUI（双击 exe 场景）
@@ -591,9 +597,10 @@ if (args.length === 0) {
       }
       const { startTui } = await import("../tui/app.js");
       await startTui(defaultBaseUrl);
-    } catch (error: any) {
-      console.error(chalk.red(`启动失败: ${error.message}`));
-      process.exit(1);
+    } catch (e: any) {
+      // TUI 不可用时显示帮助
+      console.log(chalk.yellow("TUI 不可用，显示帮助信息：\n"));
+      program.outputHelp();
     }
   })();
 } else {
