@@ -22,7 +22,7 @@ const createStatus = (message: string) => {
   };
 };
 
-program.name("ncm-cloud").description("网易云音乐云盘歌曲管理 CLI").version("0.1.0");
+program.name("ncm-cloud").description("网易云音乐云盘歌曲管理 CLI").version("2.1.0");
 
 const withAppReady = async (baseUrl?: string) => {
   const url = baseUrl || defaultBaseUrl;
