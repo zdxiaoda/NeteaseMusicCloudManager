@@ -71,6 +71,7 @@ export async function startTui(baseUrl: string): Promise<void> {
   mainLayout.add(statusBar.container);
 
   renderer.root.add(mainLayout);
+  renderer.root.add(catWidget.container);
 
   // 全局快捷键
   keyHandler.on("keypress", (key: KeyEvent) => {
