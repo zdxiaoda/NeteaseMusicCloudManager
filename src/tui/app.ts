@@ -32,6 +32,13 @@ export async function startTui(baseUrl: string): Promise<void> {
   const modalManager = createModalManager(renderer, keyHandler);
   const catWidget = createCatWidget(renderer);
 
+  // 设置焦点恢复函数
+  const menuEl = () => renderer.root.findDescendantById("menu-select") as any;
+  modalManager.setRestoreFocus(() => {
+    const menu = menuEl();
+    if (menu) menu.focus();
+  });
+
   // 创建操作处理器
   const actions = createActionHandlers(app, renderer, logPanel, modalManager, statusBar, catWidget);
 
@@ -81,8 +88,8 @@ export async function startTui(baseUrl: string): Promise<void> {
       renderer.destroy();
       process.exit(0);
     } else if (key.name === "escape") {
-      const menuEl = renderer.root.findDescendantById("menu-select") as any;
-      if (menuEl) menuEl.focus();
+      const menu = menuEl();
+      if (menu) menu.focus();
     }
   });
 
@@ -90,8 +97,8 @@ export async function startTui(baseUrl: string): Promise<void> {
   logPanel.append("NCM API 已拉起", "success");
 
   // 聚焦菜单
-  const menuEl = renderer.root.findDescendantById("menu-select") as any;
-  if (menuEl) menuEl.focus();
+  const menu = menuEl();
+  if (menu) menu.focus();
 
   renderer.start();
 }

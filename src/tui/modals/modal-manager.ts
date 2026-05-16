@@ -18,6 +18,7 @@ export interface ModalManager {
   showQrCode: (qrText: string) => Promise<"open" | "close">;
   showTable: (title: string, table: BoxRenderable) => Promise<void>;
   askYesNo: (label: string) => Promise<boolean>;
+  setRestoreFocus: (fn: () => void) => void;
   isActive: () => boolean;
 }
 
@@ -29,8 +30,14 @@ interface ActiveModal {
 
 export function createModalManager(renderer: CliRenderer, keyHandler: any): ModalManager {
   let activeModal: ActiveModal | null = null;
+  let restoreFocusFn: (() => void) | null = null;
 
   const isActive = () => activeModal !== null;
+
+  // 设置焦点恢复函数
+  const setRestoreFocus = (fn: () => void) => {
+    restoreFocusFn = fn;
+  };
 
   const showModal = (content: BoxRenderable, title: string): ActiveModal => {
     const overlay = new BoxRenderable(renderer, {
@@ -82,6 +89,10 @@ export function createModalManager(renderer: CliRenderer, keyHandler: any): Moda
     if (activeModal) {
       activeModal.cleanup();
       activeModal = null;
+      // 恢复焦点到菜单
+      if (restoreFocusFn) {
+        restoreFocusFn();
+      }
     }
   };
 
@@ -421,5 +432,5 @@ export function createModalManager(renderer: CliRenderer, keyHandler: any): Moda
     });
   };
 
-  return { askInput, askChoice, showViewer, showQrCode, showTable, askYesNo, isActive };
+  return { askInput, askChoice, showViewer, showQrCode, showTable, askYesNo, setRestoreFocus, isActive };
 }
