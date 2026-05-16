@@ -9,6 +9,7 @@ import { ensureApiServer } from "../infra/api/api-server-manager.js";
 import { openQrImageWithSystemDefault, showLoginQr } from "../infra/qr-display.js";
 
 declare const __APP_VERSION__: string;
+const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
 
 const program = new Command();
 const defaultBaseUrl = process.env.NCM_API_BASE_URL || "http://localhost:3000";
@@ -24,7 +25,7 @@ const createStatus = (message: string) => {
   };
 };
 
-program.name("ncm-cloud").description("网易云音乐云盘歌曲管理 CLI").version(__APP_VERSION__);
+program.name("ncm-cloud").description("网易云音乐云盘歌曲管理 CLI").version(APP_VERSION);
 
 const withAppReady = async (baseUrl?: string) => {
   const url = baseUrl || defaultBaseUrl;
