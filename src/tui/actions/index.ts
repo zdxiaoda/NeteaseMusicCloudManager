@@ -86,7 +86,7 @@ export function createActionHandlers(
       logPanel.append("请使用二维码扫码登录", "info");
       
       // 尝试在终端显示二维码
-      const mode = await showLoginQr(qr.qrimg, { 
+      const mode = await showLoginQr(qr.qrurl, { 
         writeRaw: (text) => {
           // 将二维码文本添加到日志
           logPanel.append(text);
@@ -96,25 +96,21 @@ export function createActionHandlers(
       if (mode === "terminal" || mode === "utf8") {
         logPanel.append("已在终端内显示二维码", "success");
       } else {
-        logPanel.append("无法在终端显示二维码，将显示 data URL", "warning");
+        logPanel.append("无法在终端显示二维码", "warning");
       }
       
       const action = await modalManager.askChoice("二维码选项", [
         { label: "继续等待扫码", value: "wait" },
         { label: "重新打开二维码图片", value: "open" },
-        { label: "查看二维码 data URL", value: "data" },
+        { label: "查看二维码 URL", value: "url" },
         { label: "取消本次登录", value: "cancel" },
       ]);
       if (action === "cancel" || action === undefined) { logPanel.append("已取消", "info"); return; }
       if (action === "open") {
         const opened = openQrImageWithSystemDefault(qr.qrimg);
         logPanel.append(opened ? "已打开二维码图片" : "打开二维码图片失败", opened ? "success" : "error");
-      } else if (action === "data") {
-        // 显示 data URL 的简化版本
-        const preview = qr.qrimg.length > 200 
-          ? qr.qrimg.slice(0, 100) + "\n...\n" + qr.qrimg.slice(-50)
-          : qr.qrimg;
-        await modalManager.showViewer("二维码 data URL", preview);
+      } else if (action === "url") {
+        await modalManager.showViewer("扫码登录 URL", qr.qrurl);
       }
       statusBar.setLoading("等待扫码...");
       logPanel.append("等待扫码登录...", "info");

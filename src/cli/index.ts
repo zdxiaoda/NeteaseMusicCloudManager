@@ -66,15 +66,15 @@ program
     } else {
       const qr = await app.authService.createQr();
       console.log(chalk.cyan("请扫码登录："));
-      const mode = await showLoginQr(qr.qrimg, { writeRaw: (text) => console.log(text) });
+      const mode = await showLoginQr(qr.qrurl, { writeRaw: (text) => console.log(text) });
       if (mode === "terminal" || mode === "utf8") {
         console.log(chalk.gray("已在终端内显示二维码。"));
       } else {
-        console.log(chalk.yellow("无法在终端显示二维码，请手动复制以下 data URL 到浏览器："));
-        console.log(qr.qrimg);
+        console.log(chalk.yellow("无法在终端显示二维码，请手动复制以下 URL 到浏览器扫码："));
+        console.log(qr.qrurl);
       }
       const qrFallbackAction = (await input({
-        message: "若未看到二维码：输入 o 打开图片，输入 p 打印 data URL，直接回车继续等待扫码"
+        message: "若未看到二维码：输入 o 打开图片，输入 p 打印 URL，直接回车继续等待扫码"
       }))
         .trim()
         .toLowerCase();
@@ -83,11 +83,11 @@ program
         if (opened) {
           console.log(chalk.gray("已使用系统默认应用打开二维码图片。"));
         } else {
-          console.log(chalk.yellow("打开图片失败，可输入 p 查看 data URL。"));
+          console.log(chalk.yellow("打开图片失败，可输入 p 查看 URL。"));
         }
       } else if (qrFallbackAction === "p") {
-        console.log(chalk.yellow("请手动复制以下 data URL 到浏览器："));
-        console.log(qr.qrimg);
+        console.log(chalk.yellow("请手动复制以下 URL 到浏览器扫码："));
+        console.log(qr.qrurl);
       }
       const ok = await app.authService.waitQrLogin(qr.key);
       if (!ok) throw new Error("二维码登录超时");

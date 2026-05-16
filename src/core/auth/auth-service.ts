@@ -44,14 +44,15 @@ export class AuthService {
     this.persistSession(result.cookie, "email", this.extractUserId(result));
   }
 
-  async createQr(): Promise<{ qrimg: string; key: string }> {
+  async createQr(): Promise<{ qrimg: string; qrurl: string; key: string }> {
     const keyResult = await this.apiClient.get<{ data: { unikey: string } }>("/login/qr/key");
     const key = keyResult.data.unikey;
     const qr = await this.apiClient.get<{ data: { qrimg: string } }>("/login/qr/create", {
       key,
       qrimg: true
     });
-    return { qrimg: qr.data.qrimg, key };
+    const qrurl = `https://music.163.com/login?codekey=${key}`;
+    return { qrimg: qr.data.qrimg, qrurl, key };
   }
 
   async waitQrLogin(key: string, timeoutMs = 120000): Promise<boolean> {

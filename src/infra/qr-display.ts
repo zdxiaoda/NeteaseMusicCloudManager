@@ -9,15 +9,6 @@ function commandExists(name: string): boolean {
   return result.status === 0;
 }
 
-function extractUrlFromDataUri(dataUri: string): string | undefined {
-  // 如果是 URL，直接返回
-  if (dataUri.startsWith("http://") || dataUri.startsWith("https://")) {
-    return dataUri;
-  }
-  // 如果是 data URI，无法直接用于终端显示
-  return undefined;
-}
-
 export async function renderQrAsText(text: string): Promise<string | undefined> {
   try {
     // 动态导入避免打包问题
@@ -99,26 +90,23 @@ export function openUrl(url: string): boolean {
 }
 
 export async function showLoginQr(
-  qrData: string,
+  qrUrl: string,
   options: {
     writeRaw?: (text: string) => void;
   } = {}
-): Promise<"terminal" | "utf8" | "external" | "data"> {
-  if (!qrData) return "data";
-
-  // 提取可显示的内容
-  const displayText = extractUrlFromDataUri(qrData) || qrData;
+): Promise<"terminal" | "utf8" | "data"> {
+  if (!qrUrl) return "data";
 
   if (options.writeRaw) {
     // 尝试终端渲染
-    const terminalQr = await renderQrAsText(displayText);
+    const terminalQr = await renderQrAsText(qrUrl);
     if (terminalQr) {
       options.writeRaw(terminalQr);
       return "terminal";
     }
 
     // 尝试 UTF8 渲染
-    const utf8Qr = await renderQrAsUtf8(displayText);
+    const utf8Qr = await renderQrAsUtf8(qrUrl);
     if (utf8Qr) {
       options.writeRaw(utf8Qr);
       return "utf8";
