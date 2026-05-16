@@ -1,5 +1,9 @@
 # NeteaseMusicCloudManager
 
+<p align="center">
+  <img src="assets/logo.png" alt="NeteaseMusicCloudManager Logo" width="200">
+</p>
+
 一个基于 [NeteaseCloudMusicApiEnhanced](https://neteasecloudmusicapienhanced.js.org/#/) 的网易云音乐云盘管理工具，支持：
 
 - 跨平台 CLI（Windows/macOS/Linux）
