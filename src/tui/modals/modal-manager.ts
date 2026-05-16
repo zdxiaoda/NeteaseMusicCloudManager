@@ -309,7 +309,7 @@ export function createModalManager(renderer: CliRenderer, keyHandler: any): Moda
         id: "qr-scroll",
         width: "100%",
         flexGrow: 1,
-        backgroundColor: THEME.bgPanel,
+        backgroundColor: "#ffffff",
         borderStyle: "rounded",
         borderColor: THEME.primary,
       });
@@ -321,7 +321,7 @@ export function createModalManager(renderer: CliRenderer, keyHandler: any): Moda
             id: `qr-line-${i}`,
             content: lines[i],
             width: "100%",
-            fg: THEME.textBright,
+            fg: "#000000",
           })
         );
       }
