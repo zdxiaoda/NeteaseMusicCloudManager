@@ -14,9 +14,10 @@
     "start:tui": "bun dist/cli/index.js tui",
     "typecheck": "tsc --noEmit",
     "generate:api": "bun scripts/generate-embedded-api.ts",
-    "compile": "bun run generate:api && bun build src/cli/index.ts --compile --outfile artifacts/ncm-cloud",
-    "compile:win": "bun run generate:api && bun build src/cli/index.ts --compile --target=bun-windows-x64 --outfile artifacts/ncm-cloud-win.exe",
-    "compile:linux": "bun run generate:api && bun build src/cli/index.ts --compile --target=bun-linux-x64 --outfile artifacts/ncm-cloud-linux"
+    "compile": "bun scripts/build.ts",
+    "compile:win": "bun scripts/build.ts windows-x64",
+    "compile:linux": "bun scripts/build.ts linux-x64",
+    "compile:mac": "bun scripts/build.ts darwin-arm64"
   },
   "keywords": [],
   "author": "",

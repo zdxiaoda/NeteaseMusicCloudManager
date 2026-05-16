@@ -51,7 +51,7 @@ jobs:
         run: bun run generate:api
 
       - name: Compile
-        run: bun build src/cli/index.ts --compile --outfile artifacts/${{ matrix.artifact_name }}
+        run: bun scripts/build.ts ${{ matrix.platform == 'win' && 'windows-x64' || matrix.platform == 'mac' && 'darwin-arm64' || 'linux-x64' }}
 
       - name: Upload platform artifacts
         uses: actions/upload-artifact@v4

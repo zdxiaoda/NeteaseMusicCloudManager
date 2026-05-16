@@ -4,15 +4,11 @@ import Table from "cli-table3";
 import cliProgress from "cli-progress";
 import { input, password, select, confirm } from "@inquirer/prompts";
 import chalk from "chalk";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { createApp } from "../bootstrap.js";
 import { ensureApiServer } from "../infra/api/api-server-manager.js";
 import { openQrImageWithSystemDefault, showLoginQr } from "../infra/qr-display.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(readFileSync(join(__dirname, "..", "..", "package.json"), "utf-8"));
+declare const __APP_VERSION__: string;
 
 const program = new Command();
 const defaultBaseUrl = process.env.NCM_API_BASE_URL || "http://localhost:3000";
@@ -28,7 +24,7 @@ const createStatus = (message: string) => {
   };
 };
 
-program.name("ncm-cloud").description("网易云音乐云盘歌曲管理 CLI").version(pkg.version);
+program.name("ncm-cloud").description("网易云音乐云盘歌曲管理 CLI").version(__APP_VERSION__);
 
 const withAppReady = async (baseUrl?: string) => {
   const url = baseUrl || defaultBaseUrl;
