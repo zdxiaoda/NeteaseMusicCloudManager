@@ -319,11 +319,8 @@ export function createActionHandlers(
       const results = await app.cloudService.searchCloudSongs(query, searchLimit);
       if (!results.length) { logPanel.append("搜索无结果，已跳过", "warning"); continue; }
 
-      // 使用表格显示搜索结果
-      const resultTable = createSongList(renderer, results, `搜索结果: ${query}`);
-      await modalManager.showTable("搜索结果", resultTable);
-
-      const choose = await modalManager.askChoice("选择匹配结果", [
+      // 直接让用户选择，不需要先显示表格
+      const choose = await modalManager.askChoice(`选择匹配结果 (${results.length}条)`, [
         ...results.map((row: any) => ({
           label: `${row.name} - ${row.artist} (#${row.songId})`,
           value: `pick:${row.songId}` as const,
