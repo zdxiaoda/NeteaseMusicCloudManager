@@ -38,6 +38,7 @@
 
 ```bash
 bun install
+bun run generate:api
 bun run build
 ```
 
@@ -274,6 +275,14 @@ bun run dev -- diff --all
 ### Q4: 为什么上传后马上在列表里看不到？
 
 网易云 API 存在短时缓存（常见约 2 分钟）与后端处理延迟，属于正常现象。当前工具不会用"立即拉取列表"来判定上传失败。
+
+### Q5: `Cannot find module './embedded-api.js'`？
+
+首次运行或重新安装依赖后，需要先生成嵌入的 API 模块：
+
+```bash
+bun run generate:api
+```
 
 ---
 
