@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 /**
- * 构建后脚本：复制 @neteasecloudmusicapienhanced/api 包及其依赖到 artifacts/api 目录
+ * 构建后脚本：复制 @neteasecloudmusicapienhanced/api 包及其所有传递依赖到 artifacts/api 目录
  * 这样编译后的可执行文件可以找到并启动 API 服务器
  */
 
-import { existsSync, mkdirSync, cpSync, readdirSync, statSync } from "node:fs";
-import { join, dirname, basename } from "node:path";
+import { existsSync, mkdirSync, cpSync, readdirSync, statSync, readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -13,25 +13,6 @@ const projectRoot = join(__dirname, "..");
 const artifactsDir = join(projectRoot, "artifacts");
 const apiTargetDir = join(artifactsDir, "api");
 const nodeModulesDir = join(projectRoot, "node_modules");
-
-// API 包需要的所有依赖（从其 package.json 中提取）
-const apiDependencies = [
-  "@neteasecloudmusicapienhanced/unblockmusic-utils",
-  "axios",
-  "crypto-js",
-  "dotenv",
-  "express",
-  "express-fileupload",
-  "gzip",
-  "music-metadata",
-  "node-forge",
-  "pac-proxy-agent",
-  "qrcode",
-  "safe-decode-uri-component",
-  "tunnel",
-  "xml2js",
-  "yargs",
-];
 
 function copyDirSync(src: string, dest: string) {
   if (!existsSync(dest)) {
@@ -44,6 +25,55 @@ function ensureDir(dir: string) {
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
+}
+
+function readPackageJson(pkgDir: string): Record<string, string> | null {
+  const pkgPath = join(pkgDir, "package.json");
+  if (!existsSync(pkgPath)) return null;
+  try {
+    const content = readFileSync(pkgPath, "utf-8");
+    return JSON.parse(content);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 递归收集包的所有依赖（包括传递依赖）
+ */
+function collectAllDeps(
+  entryPkgDir: string,
+  collected: Set<string> = new Set()
+): Set<string> {
+  const pkg = readPackageJson(entryPkgDir);
+  if (!pkg) return collected;
+
+  const deps = { ...pkg.dependencies };
+  for (const depName of Object.keys(deps)) {
+    if (collected.has(depName)) continue;
+    collected.add(depName);
+
+    // 找到这个依赖的实际目录
+    let depDir: string | null = null;
+
+    // 先从 entryPkgDir 的 node_modules 找（嵌套依赖）
+    const nestedPath = join(entryPkgDir, "node_modules", depName);
+    if (existsSync(nestedPath)) {
+      depDir = nestedPath;
+    } else {
+      // 从项目根 node_modules 找
+      const rootPath = join(nodeModulesDir, depName);
+      if (existsSync(rootPath)) {
+        depDir = rootPath;
+      }
+    }
+
+    if (depDir) {
+      collectAllDeps(depDir, collected);
+    }
+  }
+
+  return collected;
 }
 
 console.log("准备 API 依赖...");
@@ -79,10 +109,7 @@ for (const file of apiFiles) {
   const destPath = join(apiTargetDir, file);
 
   if (!existsSync(srcPath)) {
-    if (file === "util") {
-      // util 目录可能不存在，跳过
-      continue;
-    }
+    if (file === "util") continue;
     console.warn(`警告：跳过不存在的文件/目录: ${file}`);
     continue;
   }
@@ -96,19 +123,25 @@ for (const file of apiFiles) {
   }
 }
 
-// 复制 API 依赖到 api/node_modules
+// 递归收集所有依赖
+console.log("递归收集依赖...");
+const allDeps = collectAllDeps(apiSourceDir);
+console.log(`共发现 ${allDeps.size} 个依赖`);
+
+// 复制所有依赖到 api/node_modules
 const apiNodeModulesDir = join(apiTargetDir, "node_modules");
 ensureDir(apiNodeModulesDir);
 
-// 复制直接依赖
-for (const dep of apiDependencies) {
-  const srcPath = join(nodeModulesDir, dep);
-  const destPath = join(apiNodeModulesDir, dep);
+for (const depName of allDeps) {
+  const srcPath = join(nodeModulesDir, depName);
+  const destPath = join(apiNodeModulesDir, depName);
 
   if (!existsSync(srcPath)) {
-    console.warn(`警告：跳过不存在的依赖: ${dep}`);
+    console.warn(`警告：跳过不存在的依赖: ${depName}`);
     continue;
   }
+
+  if (!statSync(srcPath).isDirectory()) continue;
 
   ensureDir(dirname(destPath));
   cpSync(srcPath, destPath, { recursive: true });
@@ -126,77 +159,6 @@ if (existsSync(scopeDir)) {
     if (statSync(srcPath).isDirectory()) {
       copyDirSync(srcPath, destPath);
     }
-  }
-}
-
-// 复制重要的传递依赖
-const transitiveDeps = [
-  "follow-redirects",
-  "proxy-from-env",
-  "form-data",
-  "mime-types",
-  "mime-db",
-  "combined-stream",
-  "delayed-stream",
-  "asynckit",
-  "ms",
-  "debug",
-  "depd",
-  "destroy",
-  "encodeurl",
-  "escape-html",
-  "etag",
-  "fresh",
-  "http-errors",
-  "inherits",
-  "setprototypeof",
-  "statuses",
-  "toidentifier",
-  "on-finished",
-  "ee-first",
-  "parseurl",
-  "proxy-addr",
-  "forwarded",
-  "ipaddr.js",
-  "qs",
-  "raw-body",
-  "bytes",
-  "iconv-lite",
-  "safer-buffer",
-  "unpipe",
-  "send",
-  "mime",
-  "range-parser",
-  "serve-static",
-  "content-disposition",
-  "safe-buffer",
-  "cookie",
-  "cookie-signature",
-  "body-parser",
-  "content-type",
-  "type-is",
-  "media-typer",
-  "methods",
-  "path-to-regexp",
-  "cors",
-  "uuid",
-  "busboy",
-  "streamsearch",
-  "fs-extra",
-  "graceful-fs",
-  "jsonfile",
-  "universalify",
-  "node-abort-controller",
-];
-
-// 复制这些传递依赖（如果存在）
-for (const dep of transitiveDeps) {
-  const srcPath = join(nodeModulesDir, dep);
-  const destPath = join(apiNodeModulesDir, dep);
-
-  if (existsSync(srcPath) && statSync(srcPath).isDirectory()) {
-    ensureDir(dirname(destPath));
-    copyDirSync(srcPath, destPath);
   }
 }
 

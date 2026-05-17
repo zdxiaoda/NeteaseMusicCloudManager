@@ -1,71 +1,37 @@
 import axios from "axios";
 import { spawn, ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync, statSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
-import os from "node:os";
-import { getEmbeddedFiles, getApiFileName } from "./embedded-api.js";
 
 let serverProcess: ChildProcess | undefined;
-let extractedApiDir: string | undefined;
 
-const API_TEMP_DIR_NAME = "ncm-cloud-api";
+function findApiDir(): string {
+  try {
+    const pkgPath = require.resolve("@neteasecloudmusicapienhanced/api/package.json");
+    return path.dirname(pkgPath);
+  } catch {}
 
-function getTempApiDir(): string {
-  return path.join(os.tmpdir(), API_TEMP_DIR_NAME);
-}
-
-function ensureApiExtracted(): string {
-  if (extractedApiDir && existsSync(extractedApiDir)) {
-    return extractedApiDir;
+  const execDir = path.dirname(process.execPath);
+  for (const relPath of [
+    path.join("node_modules", "@neteasecloudmusicapienhanced", "api"),
+    "api",
+  ]) {
+    const candidate = path.join(execDir, relPath);
+    if (existsSync(path.join(candidate, "app.js"))) return candidate;
   }
 
-  const tempDir = getTempApiDir();
-  const markerFile = path.join(tempDir, ".extracted");
+  const cwdCandidate = path.join(
+    process.cwd(),
+    "node_modules",
+    "@neteasecloudmusicapienhanced",
+    "api"
+  );
+  if (existsSync(path.join(cwdCandidate, "app.js"))) return cwdCandidate;
 
-  // 检查是否已解压且版本匹配
-  if (existsSync(markerFile)) {
-    extractedApiDir = tempDir;
-    return tempDir;
-  }
-
-  // 清理并重新创建
-  if (existsSync(tempDir)) {
-    try {
-      // 使用系统命令删除，更可靠
-      const { execSync } = require("child_process");
-      execSync(`rm -rf "${tempDir}"`, { timeout: 5000 });
-    } catch {
-      // 如果删除失败，使用新目录名
-      const newTempDir = path.join(os.tmpdir(), `${API_TEMP_DIR_NAME}-${Date.now()}`);
-      mkdirSync(newTempDir, { recursive: true });
-      extractedApiDir = newTempDir;
-      return extractFiles(newTempDir);
-    }
-  }
-
-  mkdirSync(tempDir, { recursive: true });
-  extractedApiDir = tempDir;
-  return extractFiles(tempDir);
-}
-
-function extractFiles(targetDir: string): string {
-  const files = getEmbeddedFiles();
-
-  for (const file of files) {
-    const filePath = path.join(targetDir, file.path);
-    const dir = path.dirname(filePath);
-
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-    }
-
-    writeFileSync(filePath, file.content);
-  }
-
-  // 写入标记文件
-  writeFileSync(path.join(targetDir, ".extracted"), Date.now().toString());
-
-  return targetDir;
+  throw new Error(
+    "找不到 @neteasecloudmusicapienhanced/api，请先运行 bun install。\n" +
+      "或设置 NCM_AUTO_START_API=0 关闭自动拉起。"
+  );
 }
 
 function isLocalAddress(baseUrl: string): boolean {
@@ -87,7 +53,7 @@ async function isApiReady(baseUrl: string): Promise<boolean> {
   try {
     await axios.get(`${baseUrl.replace(/\/$/, "")}/login/status`, {
       timeout: 1500,
-      validateStatus: () => true
+      validateStatus: () => true,
     });
     return true;
   } catch {
@@ -113,31 +79,27 @@ export async function ensureApiServer(baseUrl: string): Promise<void> {
   }
 
   const port = parsePort(baseUrl);
-  const readyTimeoutMs = 60000;
+  const apiDir = findApiDir();
+  const appJsPath = path.join(apiDir, "app.js");
 
-  // 解压嵌入的 API 文件
-  const apiDir = ensureApiExtracted();
-  const apiAppPath = path.join(apiDir, getApiFileName());
-
-  if (!existsSync(apiAppPath)) {
+  if (!existsSync(appJsPath)) {
     throw new Error(
-      "未找到内置 API 启动模块，请先手动启动 @neteasecloudmusicapienhanced/api，或设置 NCM_AUTO_START_API=0 关闭自动拉起。"
+      `未找到 API 入口: ${appJsPath}\n` +
+        "请先手动启动 @neteasecloudmusicapienhanced/api，或设置 NCM_AUTO_START_API=0 关闭自动拉起。"
     );
   }
 
-  const proc = spawn("node", [apiAppPath], {
+  const proc = spawn("node", [appJsPath], {
     env: { ...process.env, PORT: port, NCM_LOG_LEVEL: "error" },
     cwd: apiDir,
     stdio: "ignore",
-    detached: true
+    detached: true,
   });
   proc.unref();
   serverProcess = proc;
 
-  const ready = await waitReady(baseUrl, readyTimeoutMs);
-  if (ready) {
-    return;
-  }
+  const ready = await waitReady(baseUrl, 60000);
+  if (ready) return;
 
   if (!proc.killed && proc.pid) {
     try {
@@ -149,6 +111,6 @@ export async function ensureApiServer(baseUrl: string): Promise<void> {
   serverProcess = undefined;
 
   throw new Error(
-    `自动启动网易云 API 失败，请按文档手动启动: PORT=${port} node "${apiAppPath}"`
+    `自动启动网易云 API 失败，请按文档手动启动: PORT=${port} node "${appJsPath}"`
   );
 }

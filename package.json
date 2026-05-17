@@ -13,7 +13,6 @@
     "start": "bun dist/cli/index.js",
     "start:tui": "bun dist/cli/index.js tui",
     "typecheck": "tsc --noEmit",
-    "generate:api": "bun scripts/generate-embedded-api.ts",
     "compile": "bun scripts/build.ts",
     "compile:win": "bun scripts/build.ts windows-x64",
     "compile:linux": "bun scripts/build.ts linux-x64",

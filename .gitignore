@@ -95,4 +95,3 @@ dist-pkg/
 artifacts/
 
 # Generated embedded API module
-src/infra/api/embedded-api.ts
