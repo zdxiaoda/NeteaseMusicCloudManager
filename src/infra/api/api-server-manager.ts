@@ -1,36 +1,20 @@
 import axios from "axios";
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
 let serverStarted = false;
 
-function findApiDir(): string {
-  try {
-    const pkgPath = require.resolve("@neteasecloudmusicapienhanced/api/package.json");
-    return path.dirname(pkgPath);
-  } catch {}
+function findApiEntryInCwd(): string | null {
+  const candidate = path.join(process.cwd(), "api-entry.js");
+  if (existsSync(candidate)) return candidate;
+  return null;
+}
 
+function getStandaloneApiPath(): string {
   const execDir = path.dirname(process.execPath);
-  for (const relPath of [
-    path.join("node_modules", "@neteasecloudmusicapienhanced", "api"),
-    "api",
-  ]) {
-    const candidate = path.join(execDir, relPath);
-    if (existsSync(path.join(candidate, "app.js"))) return candidate;
-  }
-
-  const cwdCandidate = path.join(
-    process.cwd(),
-    "node_modules",
-    "@neteasecloudmusicapienhanced",
-    "api"
-  );
-  if (existsSync(path.join(cwdCandidate, "app.js"))) return cwdCandidate;
-
-  throw new Error(
-    "找不到 @neteasecloudmusicapienhanced/api，请先运行 bun install。\n" +
-      "或设置 NCM_AUTO_START_API=0 关闭自动拉起。"
-  );
+  const apiExeName = process.platform === "win32" ? "api-server.exe" : "api-server";
+  return path.join(execDir, apiExeName);
 }
 
 function isLocalAddress(baseUrl: string): boolean {
@@ -78,26 +62,46 @@ export async function ensureApiServer(baseUrl: string): Promise<void> {
   }
 
   const port = parsePort(baseUrl);
-  const apiDir = findApiDir();
-  const appJsPath = path.join(apiDir, "app.js");
+  const env = { ...process.env, PORT: port, NCM_LOG_LEVEL: "error" };
+  const apiStandalonePath = getStandaloneApiPath();
 
-  if (!existsSync(appJsPath)) {
-    throw new Error(
-      `未找到 API 入口: ${appJsPath}\n` +
-        "请先手动启动 @neteasecloudmusicapienhanced/api，或设置 NCM_AUTO_START_API=0 关闭自动拉起。"
-    );
+  if (existsSync(apiStandalonePath)) {
+    const apiProcess = spawn(apiStandalonePath, [], {
+      env,
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    apiProcess.unref();
+  } else {
+    const apiEntryPath = findApiEntryInCwd();
+    if (apiEntryPath) {
+      try {
+        const apiProcess = spawn(process.execPath, ["run", apiEntryPath], {
+          env,
+          detached: true,
+          stdio: "ignore",
+          windowsHide: true,
+        });
+        apiProcess.unref();
+      } catch {
+        process.env.PORT = port;
+        process.env.NCM_LOG_LEVEL = "error";
+        require(apiEntryPath);
+      }
+    } else {
+      process.env.PORT = port;
+      process.env.NCM_LOG_LEVEL = "error";
+      require("@neteasecloudmusicapienhanced/api/app.js");
+    }
   }
 
-  process.env.PORT = port;
-  process.env.NCM_LOG_LEVEL = "error";
-
-  require(appJsPath);
   serverStarted = true;
 
   const ready = await waitReady(baseUrl, 60000);
   if (ready) return;
 
   throw new Error(
-    `自动启动网易云 API 失败，请按文档手动启动: PORT=${port} node "${appJsPath}"`
+    `自动启动网易云 API 失败，请按文档手动启动，或确保 API 可执行文件与主程序位于同一目录。`
   );
 }

@@ -1,0 +1,9 @@
+{
+  "name": "ncm-api-standalone",
+  "main": "api-entry.js",
+  "pkg": {
+    "assets": [
+      "node_modules/@neteasecloudmusicapienhanced/api/**/*"
+    ]
+  }
+}
