@@ -52,7 +52,13 @@ jobs:
         run: bun scripts/build.ts ${{ matrix.target }}
 
       - name: Rename artifact
-        run: mv artifacts/ncm-cloud* artifacts/${{ matrix.artifact_name }}
+        run: |
+          cd artifacts
+          if [ -f "ncm-cloud" ]; then
+            mv ncm-cloud ${{ matrix.artifact_name }}
+          elif [ -f "ncm-cloud.exe" ]; then
+            mv ncm-cloud.exe ${{ matrix.artifact_name }}
+          fi
 
       - name: Upload platform artifacts
         uses: actions/upload-artifact@v4
