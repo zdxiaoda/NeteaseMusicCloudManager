@@ -23,12 +23,15 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             target: linux-x64
+            artifact_name: ncm-cloud-linux
           - os: windows-latest
             platform: win
             target: windows-x64
+            artifact_name: ncm-cloud-win.exe
           - os: macos-latest
             platform: mac
             target: darwin-arm64
+            artifact_name: ncm-cloud-mac
 
     steps:
       - name: Checkout
@@ -40,21 +43,22 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        run: |
-          bun install --frozen-lockfile
-          bun install --os="*" --cpu="*" @opentui/core
+        run: bun install --frozen-lockfile
 
       - name: Type check
         run: bun run typecheck
 
-      - name: Build and package
+      - name: Build
         run: bun scripts/build.ts ${{ matrix.target }}
+
+      - name: Rename artifact
+        run: mv artifacts/ncm-cloud* artifacts/${{ matrix.artifact_name }}
 
       - name: Upload platform artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: artifacts-${{ matrix.platform }}
-          path: artifacts/*.zip
+          name: ${{ matrix.artifact_name }}
+          path: artifacts/${{ matrix.artifact_name }}
           if-no-files-found: error
 
   release:
@@ -67,8 +71,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: release-assets
-          pattern: artifacts-*
-          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la release-assets/
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
@@ -76,4 +81,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
           generate_release_notes: true
-          files: release-assets/*.zip
+          files: |
+            release-assets/ncm-cloud-linux
+            release-assets/ncm-cloud-win.exe
+            release-assets/ncm-cloud-mac

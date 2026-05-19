@@ -27,81 +27,121 @@
 
 ## 1. 环境要求
 
-- [Bun](https://bun.sh) 1.0+
-- 可访问网易云 API 服务（本项目默认会自动尝试拉起）
+- [Bun](https://bun.sh) 1.0+（仅开发/编译时需要）
+- [Node.js](https://nodejs.org/) 18+（运行 API 服务时需要）
 
 ---
 
-## 2. 安装与启动
+## 2. 快速部署
 
-在项目目录执行：
+### 2.1 部署 API 服务
+
+API 服务是独立的网易云音乐后端，需要单独运行。
+
+**方式一：使用 npx/bunx 直接运行（推荐）**
 
 ```bash
+# 使用 bunx（需要安装 Bun）
+PORT=3000 bunx @neteasecloudmusicapienhanced/api
+
+# 使用 npx（需要安装 Node.js）
+PORT=3000 npx @neteasecloudmusicapienhanced/api
+```
+
+**方式二：Docker 部署**
+
+```bash
+docker run -d -p 3000:3000 --name ncm-api binaryify/neteasecloudmusicapienhanced
+```
+
+**方式三：后台运行（Linux）**
+
+```bash
+# 使用 nohup
+nohup sh -c 'PORT=3000 bunx @neteasecloudmusicapienhanced/api' > ncm-api.log 2>&1 &
+
+# 或使用 systemd 创建服务
+# 参考：https://neteasecloudmusicapienhanced.js.org/#/docs
+```
+
+验证 API 服务是否启动：
+
+```bash
+curl http://localhost:3000/login/status
+```
+
+### 2.2 获取客户端
+
+**方式一：从 Releases 下载**
+
+从 [GitHub Releases](https://github.com/zdxiaoda/NeteaseMusicCloudManager/releases) 下载对应平台的可执行文件。
+
+**方式二：自行编译**
+
+```bash
+# 安装 Bun
+curl -fsSL https://bun.sh/install | bash
+
+# 克隆项目
+git clone https://github.com/zdxiaoda/NeteaseMusicCloudManager.git
+cd NeteaseMusicCloudManager
+
+# 安装依赖并编译
 bun install
-bun run build
-```
-
-开发模式：
-
-```bash
-# CLI 命令行模式
-bun run dev -- --help
-
-# TUI 全屏界面
-bun run dev:tui
-```
-
-生产模式（编译后）：
-
-```bash
-# CLI 模式
-bun run start -- --help
-
-# TUI 模式
-bun run start:tui
-```
-
-编译并打包：
-
-```bash
 bun run compile
+
+# 产物位于 artifacts/ncm-cloud
 ```
 
-输出：`artifacts/ncm-cloud.zip`（含可执行文件 + API 依赖）
+### 2.3 使用客户端
 
-解压后使用：
 ```bash
-# CLI 模式
+# 查看帮助
 ./ncm-cloud --help
 
-# TUI 模式
+# 登录（首次使用）
+./ncm-cloud login
+
+# 启动 TUI 界面
 ./ncm-cloud tui
 ```
 
+如果 API 服务不在本地，需要指定地址：
+
+```bash
+./ncm-cloud --base-url http://your-server:3000 status
+```
+
+### 2.4 跨平台编译
+
+```bash
+# 编译 Windows 版本
+bun run compile:win
+
+# 编译 Linux 版本
+bun run compile:linux
+
+# 编译 macOS 版本
+bun run compile:mac
+```
+
 ---
 
-## 3. API 服务说明
+## 3. 开发模式
 
-本工具默认 API 地址：
-
-- `http://localhost:3000`
-
-并会自动探活/拉起 API（本地地址场景）。如果自动拉起失败，可手动启动：
+开发模式会自动拉起本地 API 服务，无需手动启动：
 
 ```bash
-PORT=3000 bunx @neteasecloudmusicapienhanced/api
-```
+# 安装依赖
+bun install
 
-可通过环境变量关闭自动拉起：
+# CLI 命令行模式
+bun run dev -- --help
+bun run dev -- login
+bun run dev -- status
 
-```bash
-NCM_AUTO_START_API=0
-```
-
-指定 API 地址：
-
-```bash
-NCM_API_BASE_URL=http://127.0.0.1:3000
+# TUI 全屏界面
+bun run dev:tui
 ```
 
 ---
@@ -284,6 +324,7 @@ bun run dev -- diff --all
 | 运行时 | [Bun](https://bun.sh) |
 | TUI 框架 | [OpenTUI](https://opentui.com) |
 | 二维码显示 | [@vincentkoc/qrcode-tui](https://github.com/VincentKoc/qrcode-tui) |
+| API 调用 | [@neteasecloudmusicapienhanced/api](https://neteasecloudmusicapienhanced.js.org/) (直接调用) |
 | 包管理 | Bun 内置 |
 | 编译打包 | `bun build --compile` |
 | 类型检查 | TypeScript |

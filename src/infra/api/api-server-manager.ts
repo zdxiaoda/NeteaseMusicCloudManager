@@ -2,7 +2,15 @@ import axios from "axios";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
+declare const __COMPILED__: boolean;
+
 let serverStarted = false;
+
+// 判断是否为开发模式（未编译）
+function isDevMode(): boolean {
+  // bun build --compile 会设置这个全局变量
+  return typeof __COMPILED__ === "undefined" || !__COMPILED__;
+}
 
 function findApiDir(): string {
   try {
@@ -70,8 +78,20 @@ async function waitReady(baseUrl: string, timeoutMs = 20000): Promise<boolean> {
 }
 
 export async function ensureApiServer(baseUrl: string): Promise<void> {
+  // 非本地地址不自动启动
   if (!isLocalAddress(baseUrl)) return;
+  // API 已就绪则跳过
   if (await isApiReady(baseUrl)) return;
+  
+  // 只在开发模式下自动启动 API
+  if (!isDevMode()) {
+    throw new Error(
+      `无法连接到 API 服务器: ${baseUrl}\n` +
+      "请先启动 API 服务器，或使用 --base-url 参数指定远程 API 地址。\n" +
+      "启动本地 API: PORT=3000 bunx @neteasecloudmusicapienhanced/api"
+    );
+  }
+
   if (serverStarted) {
     const ok = await waitReady(baseUrl, 15000);
     if (ok) return;

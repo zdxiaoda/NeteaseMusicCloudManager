@@ -9,6 +9,7 @@ import { ensureApiServer } from "../infra/api/api-server-manager.js";
 import { openQrImageWithSystemDefault, showLoginQr } from "../infra/qr-display.js";
 
 declare const __APP_VERSION__: string;
+declare const __COMPILED__: boolean;
 const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
 
 const program = new Command();
