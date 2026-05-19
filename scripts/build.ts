@@ -14,11 +14,6 @@ const outfile = `artifacts/${binName}`
 const zipName = binName.replace(/\.exe$/, "")
 const zipFile = `artifacts/${zipName}.zip`
 
-// Windows 图标参数
-const windowsIcon = platform === "windows-x64" && existsSync("assets/icons/icon.ico")
-  ? "--windows-icon=assets/icons/icon.ico"
-  : ""
-
 // 清理旧产物
 if (existsSync("artifacts")) {
   rmSync("artifacts", { recursive: true })
@@ -26,10 +21,12 @@ if (existsSync("artifacts")) {
 
 await $`bun scripts/prepare-api-deps.ts`
 
-if (target) {
-  await $`bun build src/cli/index.ts --compile ${target} ${windowsIcon} --define __APP_VERSION__="'${pkg.version}'" --outfile ${outfile}`
+if (platform === "windows-x64" && existsSync("assets/icons/icon.ico")) {
+  await $`bun build src/cli/index.ts --compile --target=bun-windows-x64 --windows-icon=assets/icons/icon.ico --define __APP_VERSION__="'${pkg.version}'" --outfile ${outfile}`
+} else if (target) {
+  await $`bun build src/cli/index.ts --compile ${target} --define __APP_VERSION__="'${pkg.version}'" --outfile ${outfile}`
 } else {
-  await $`bun build src/cli/index.ts --compile ${windowsIcon} --define __APP_VERSION__="'${pkg.version}'" --outfile ${outfile}`
+  await $`bun build src/cli/index.ts --compile --define __APP_VERSION__="'${pkg.version}'" --outfile ${outfile}`
 }
 
 // 打包 zip：二进制 + api/ 目录
