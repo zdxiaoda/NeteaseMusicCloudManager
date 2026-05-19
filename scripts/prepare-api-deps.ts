@@ -76,6 +76,32 @@ function collectAllDeps(
   return collected;
 }
 
+/**
+ * 收集所有依赖（包括scoped包）
+ */
+function collectAllDepsWithScopes(
+  entryPkgDir: string,
+  collected: Set<string> = new Set()
+): Set<string> {
+  collectAllDeps(entryPkgDir, collected);
+  
+  // 也收集scoped包的依赖
+  const pkg = readPackageJson(entryPkgDir);
+  if (pkg) {
+    const deps = { ...pkg.dependencies };
+    for (const depName of Object.keys(deps)) {
+      if (depName.startsWith("@")) {
+        const scopedDir = join(nodeModulesDir, depName);
+        if (existsSync(scopedDir)) {
+          collectAllDeps(scopedDir, collected);
+        }
+      }
+    }
+  }
+  
+  return collected;
+}
+
 console.log("准备 API 依赖...");
 
 // 创建 artifacts 目录
@@ -125,7 +151,7 @@ for (const file of apiFiles) {
 
 // 递归收集所有依赖
 console.log("递归收集依赖...");
-const allDeps = collectAllDeps(apiSourceDir);
+const allDeps = collectAllDepsWithScopes(apiSourceDir);
 console.log(`共发现 ${allDeps.size} 个依赖`);
 
 // 复制所有依赖到 api/node_modules
