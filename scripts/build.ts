@@ -52,7 +52,8 @@ await $`bunx @yao-pkg/pkg api-package.json --target ${pkgTarget} --output artifa
 // 打包 zip：主二进制 + API 独立二进制
 console.log(`打包 ${zipFile}...`)
 if (process.platform === "win32") {
-  await $`powershell -NoProfile -Command "$zip='${zipFile}'; if (Test-Path $zip) { Remove-Item $zip -Force }; Add-Type -AssemblyName System.IO.Compression.FileSystem; $archive=[System.IO.Compression.ZipFile]::Open($zip,'Create'); [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,'artifacts/${binName}','${binName}') | Out-Null; [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,'artifacts/${apiExeName}','${apiExeName}') | Out-Null; $archive.Dispose()"`
+  const psZipScript = `$zip='${zipFile}'; if (Test-Path $zip) { Remove-Item $zip -Force }; Add-Type -AssemblyName System.IO.Compression.FileSystem; $archive=[System.IO.Compression.ZipFile]::Open($zip,'Create'); [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,'artifacts/${binName}','${binName}') | Out-Null; [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,'artifacts/${apiExeName}','${apiExeName}') | Out-Null; $archive.Dispose()`
+  await $`powershell -NoProfile -Command ${psZipScript}`
 } else {
   await $`cd artifacts && zip -j ${zipName}.zip ${binName} ${apiExeName}`
 }
