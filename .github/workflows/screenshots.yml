@@ -1,0 +1,175 @@
+name: Update Screenshots
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  screenshots:
+    name: Generate Screenshots
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: |
+          bun install --frozen-lockfile
+          bun install --os="*" --cpu="*" @opentui/core
+
+      - name: Build
+        run: |
+          bun run generate:api
+          bun build src/cli/index.ts --compile --outfile ./ncm-cloud.exe
+
+      - name: Generate CLI screenshot
+        shell: pwsh
+        run: |
+          # 运行 CLI 并捕获输出
+          $env:NCM_AUTO_START_API = "0"
+          $output = .\ncm-cloud.exe --help 2>&1 | Out-String
+          
+          # 创建 HTML 文件
+          $html = @"
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body { 
+                background: #1a1b26; 
+                padding: 20px; 
+                margin: 0;
+                font-family: 'Cascadia Code', 'Consolas', monospace;
+              }
+              pre { 
+                color: #a9b1d6; 
+                font-size: 14px;
+                line-height: 1.4;
+                margin: 0;
+                white-space: pre-wrap;
+              }
+            </style>
+          </head>
+          <body>
+            <pre>$($output -replace '<', '&lt;' -replace '>', '&gt;')</pre>
+          </body>
+          </html>
+          "@
+          $html | Out-File -FilePath cli-screenshot.html -Encoding utf8
+
+      - name: Generate TUI mock
+        shell: pwsh
+        run: |
+          $tuiMock = @"
+           ╔══════════════════════════╗ ╔══════════════════════ 日志 ══════════════════════╗
+           ║ ┌──────────────────────┐ ║ ║                                                   ║
+           ║ │                      │ ║ ║                                                   ║
+           ║ │   █▄▄ █▀▄ █▀▀ █▄ █  │ ║ ║                                                   ║
+           ║ │   █▄█ █▄▀ █▀  █ ▀█  │ ║ ║                                                   ║
+           ║ │    ▀  ▀ ▀ ▀▀▀ ▀  ▀  │ ║ ║                                                   ║
+           ║ │    Cloud Manager     │ ║ ║                                                   ║
+           ║ │                      │ ║ ║                                                   ║
+           ║ ├──────────────────────┤ ║ ║                                                   ║
+           ║ │ ▶ 登录               │ ║ ║                                                   ║
+           ║ │   手机号/邮箱/二维码  │ ║ ║                                                   ║
+           ║ │   状态               │ ║ ║                                                   ║
+           ║ │   检查登录状态       │ ║ ║                                                   ║
+           ║ │   目录               │ ║ ║                                                   ║
+           ║ │   设置扫描路径       │ ║ ║                                                   ║
+           ║ │   扫描               │ ║ ║                                                   ║
+           ║ │   扫描本地音乐       │ ║ ║                                                   ║
+           ║ │   刷新               │ ║ ║                                                   ║
+           ║ │   刷新云盘缓存       │ ║ ║                                                   ║
+           ║ │   ☁️ 云盘列表         │ ║ ║                                                   ║
+           ║ │   比对               │ ║ ║                                                   ║
+           ║ │   同步               │ ║ ║                                                   ║
+           ║ │   匹配               │ ║ ║                                                   ║
+           ║ │   退出               │ ║ ║                                                   ║
+           ║ └──────────────────────┘ ║ ║                                                   ║
+           ╚══════════════════════════╝ ╚═════════════════════════════════════════════════╝
+           ┌────────────────────────────────────────────────────────────────────────────────┐
+           └─ 🐱 /\\_/\\  就绪 v2.4.0 ────────────────────────────────────────────────────────┘
+          "@
+          
+          $html = @"
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body { 
+                background: #1a1b26; 
+                padding: 20px; 
+                margin: 0;
+                font-family: 'Cascadia Code', 'Consolas', monospace;
+              }
+              pre { 
+                color: #a9b1d6; 
+                font-size: 12px;
+                line-height: 1.2;
+                margin: 0;
+              }
+            </style>
+          </head>
+          <body>
+            <pre>$tuiMock</pre>
+          </body>
+          </html>
+          "@
+          $html | Out-File -FilePath tui-screenshot.html -Encoding utf8
+
+      - name: Take screenshots with Puppeteer
+        shell: pwsh
+        run: |
+          npm init -y
+          npm install puppeteer
+          
+          $script = @'
+          const puppeteer = require('puppeteer');
+          const path = require('path');
+          
+          (async () => {
+            const browser = await puppeteer.launch({
+              headless: 'new',
+              args: ['--no-sandbox', '--disable-setuid-sandbox']
+            });
+            const page = await browser.newPage();
+            await page.setViewport({ width: 900, height: 600 });
+            
+            // CLI screenshot
+            await page.goto('file://' + path.resolve('cli-screenshot.html'));
+            await page.screenshot({ path: 'assets/CLI.png', fullPage: true });
+            console.log('CLI screenshot saved');
+            
+            // TUI screenshot
+            await page.goto('file://' + path.resolve('tui-screenshot.html'));
+            await page.screenshot({ path: 'assets/TUI.png', fullPage: true });
+            console.log('TUI screenshot saved');
+            
+            await browser.close();
+          })();
+          '@
+          $script | Out-File -FilePath screenshot.js -Encoding utf8
+          node screenshot.js
+
+      - name: Commit and push
+        shell: bash
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add assets/*.png
+          git diff --staged --quiet || git commit -m "docs: auto-update screenshots for ${{ github.ref_name }}"
+          git push || true

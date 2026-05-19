@@ -573,7 +573,11 @@ program
   .action(async (opts) => {
     const baseUrl = opts.baseUrl || defaultBaseUrl;
     if (process.env.NCM_AUTO_START_API !== "0") {
-      await ensureApiServer(baseUrl);
+      try {
+        await ensureApiServer(baseUrl);
+      } catch (e) {
+        // API不可用时继续启动TUI
+      }
     }
     try {
       const { startTui } = await import("../tui/app.js");
@@ -591,7 +595,11 @@ if (args.length === 0) {
   (async () => {
     try {
       if (process.env.NCM_AUTO_START_API !== "0") {
-        await ensureApiServer(defaultBaseUrl);
+        try {
+          await ensureApiServer(defaultBaseUrl);
+        } catch (e) {
+          // API不可用时继续启动TUI
+        }
       }
       const { startTui } = await import("../tui/app.js");
       await startTui(defaultBaseUrl);
