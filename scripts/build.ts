@@ -47,7 +47,7 @@ if (platform === "windows-x64" && existsSync("assets/icons/icon.ico")) {
   await $`bun build src/cli/index.ts --compile --define __APP_VERSION__="'${pkg.version}'" --outfile ${outfile}`
 }
 
-await $`bunx pkg api-package.json --target ${pkgTarget} --output artifacts/${apiExeName}`
+await $`bunx @yao-pkg/pkg api-package.json --target ${pkgTarget} --output artifacts/${apiExeName}`
 
 // 打包 zip：主二进制 + API 独立二进制
 console.log(`打包 ${zipFile}...`)
