@@ -89,7 +89,8 @@ export async function ensureApiServer(baseUrl: string): Promise<void> {
     );
   }
 
-  const proc = spawn("node", [appJsPath], {
+  const runtime = typeof Bun !== "undefined" ? "bun" : "node";
+  const proc = spawn(runtime, [appJsPath], {
     env: { ...process.env, PORT: port, NCM_LOG_LEVEL: "error" },
     cwd: apiDir,
     stdio: "ignore",
@@ -111,6 +112,6 @@ export async function ensureApiServer(baseUrl: string): Promise<void> {
   serverProcess = undefined;
 
   throw new Error(
-    `自动启动网易云 API 失败，请按文档手动启动: PORT=${port} node "${appJsPath}"`
+    `自动启动网易云 API 失败，请按文档手动启动: PORT=${port} ${runtime} "${appJsPath}"`
   );
 }
