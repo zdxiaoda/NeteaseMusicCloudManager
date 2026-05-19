@@ -1,9 +1,9 @@
 import axios from "axios";
-import { spawn, ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { Worker } from "node:worker_threads";
 
-let serverProcess: ChildProcess | undefined;
+let serverWorker: Worker | undefined;
 
 function findApiDir(): string {
   try {
@@ -73,7 +73,7 @@ async function waitReady(baseUrl: string, timeoutMs = 20000): Promise<boolean> {
 export async function ensureApiServer(baseUrl: string): Promise<void> {
   if (!isLocalAddress(baseUrl)) return;
   if (await isApiReady(baseUrl)) return;
-  if (serverProcess && !serverProcess.killed) {
+  if (serverWorker) {
     const ok = await waitReady(baseUrl, 15000);
     if (ok) return;
   }
@@ -89,32 +89,34 @@ export async function ensureApiServer(baseUrl: string): Promise<void> {
     );
   }
 
-  const runtime = typeof Bun !== "undefined" ? process.execPath : "node";
-  const spawnEnv = typeof Bun !== "undefined" 
-    ? { ...process.env, PORT: port, NCM_LOG_LEVEL: "error", BUN_BE_BUN: "1" }
-    : { ...process.env, PORT: port, NCM_LOG_LEVEL: "error" };
-  const proc = spawn(runtime, [appJsPath], {
-    env: spawnEnv,
-    cwd: apiDir,
-    stdio: "ignore",
-    detached: true,
+  process.env.PORT = port;
+  process.env.NCM_LOG_LEVEL = "error";
+
+  const worker = new Worker(appJsPath, {
+    execArgv: [],
   });
-  proc.unref();
-  serverProcess = proc;
+
+  worker.on("error", (err) => {
+    console.error("API worker error:", err);
+    serverWorker = undefined;
+  });
+
+  worker.on("exit", (code) => {
+    if (code !== 0) {
+      console.error(`API worker exited with code ${code}`);
+    }
+    serverWorker = undefined;
+  });
+
+  serverWorker = worker;
 
   const ready = await waitReady(baseUrl, 60000);
   if (ready) return;
 
-  if (!proc.killed && proc.pid) {
-    try {
-      process.kill(-proc.pid, "SIGTERM");
-    } catch {
-      // ignore kill failures for already-exited process
-    }
-  }
-  serverProcess = undefined;
+  worker.terminate();
+  serverWorker = undefined;
 
   throw new Error(
-    `自动启动网易云 API 失败，请按文档手动启动: PORT=${port} ${runtime} "${appJsPath}"`
+    `自动启动网易云 API 失败，请按文档手动启动: PORT=${port} node "${appJsPath}"`
   );
 }
