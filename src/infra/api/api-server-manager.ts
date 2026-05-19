@@ -89,7 +89,7 @@ export async function ensureApiServer(baseUrl: string): Promise<void> {
     );
   }
 
-  const runtime = typeof Bun !== "undefined" ? "bun" : "node";
+  const runtime = typeof Bun !== "undefined" ? process.execPath : "node";
   const proc = spawn(runtime, [appJsPath], {
     env: { ...process.env, PORT: port, NCM_LOG_LEVEL: "error" },
     cwd: apiDir,
