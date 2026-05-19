@@ -13,10 +13,10 @@ const currentPlatform =
 const resolvedPlatform = platform || currentPlatform
 
 const pkgTargetMap: Record<string, string> = {
-  "windows-x64": "node18-win-x64",
-  "linux-x64": "node18-linux-x64",
-  "darwin-arm64": "node18-macos-arm64",
-  "darwin-x64": "node18-macos-x64",
+  "windows-x64": "node22-win-x64",
+  "linux-x64": "node22-linux-x64",
+  "darwin-arm64": "node22-macos-arm64",
+  "darwin-x64": "node22-macos-x64",
 }
 
 const pkgTarget = pkgTargetMap[resolvedPlatform]
@@ -52,7 +52,7 @@ await $`bunx @yao-pkg/pkg api-package.json --target ${pkgTarget} --output artifa
 // 打包 zip：主二进制 + API 独立二进制
 console.log(`打包 ${zipFile}...`)
 if (process.platform === "win32") {
-  await $`powershell -Command "Compress-Archive -Path 'artifacts/${binName}', 'artifacts/${apiExeName}' -DestinationPath '${zipFile}' -Force"`
+  await $`powershell -NoProfile -Command "$zip='${zipFile}'; if (Test-Path $zip) { Remove-Item $zip -Force }; Add-Type -AssemblyName System.IO.Compression.FileSystem; $archive=[System.IO.Compression.ZipFile]::Open($zip,'Create'); [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,'artifacts/${binName}','${binName}') | Out-Null; [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,'artifacts/${apiExeName}','${apiExeName}') | Out-Null; $archive.Dispose()"`
 } else {
   await $`cd artifacts && zip -j ${zipName}.zip ${binName} ${apiExeName}`
 }
