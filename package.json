@@ -1,6 +1,6 @@
 {
   "name": "neteasemusiccloudmanager",
-  "version": "2.5.7",
+  "version": "2.5.8",
   "description": "NetEase Cloud Music cloud disk manager CLI",
   "main": "dist/cli/index.js",
   "bin": {

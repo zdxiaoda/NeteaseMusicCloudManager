@@ -1,9 +1,8 @@
 import axios from "axios";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { Worker } from "node:worker_threads";
 
-let serverWorker: Worker | undefined;
+let serverStarted = false;
 
 function findApiDir(): string {
   try {
@@ -73,7 +72,7 @@ async function waitReady(baseUrl: string, timeoutMs = 20000): Promise<boolean> {
 export async function ensureApiServer(baseUrl: string): Promise<void> {
   if (!isLocalAddress(baseUrl)) return;
   if (await isApiReady(baseUrl)) return;
-  if (serverWorker) {
+  if (serverStarted) {
     const ok = await waitReady(baseUrl, 15000);
     if (ok) return;
   }
@@ -92,29 +91,11 @@ export async function ensureApiServer(baseUrl: string): Promise<void> {
   process.env.PORT = port;
   process.env.NCM_LOG_LEVEL = "error";
 
-  const worker = new Worker(appJsPath, {
-    execArgv: [],
-  });
-
-  worker.on("error", (err) => {
-    console.error("API worker error:", err);
-    serverWorker = undefined;
-  });
-
-  worker.on("exit", (code) => {
-    if (code !== 0) {
-      console.error(`API worker exited with code ${code}`);
-    }
-    serverWorker = undefined;
-  });
-
-  serverWorker = worker;
+  require(appJsPath);
+  serverStarted = true;
 
   const ready = await waitReady(baseUrl, 60000);
   if (ready) return;
-
-  worker.terminate();
-  serverWorker = undefined;
 
   throw new Error(
     `自动启动网易云 API 失败，请按文档手动启动: PORT=${port} node "${appJsPath}"`
