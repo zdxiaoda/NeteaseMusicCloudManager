@@ -29,5 +29,9 @@ if (target) {
 
 // 打包 zip：二进制 + api/ 目录
 console.log(`打包 ${zipFile}...`)
-await $`cd artifacts && zip -r ${zipName}.zip ${binName} api/`
+if (process.platform === "win32") {
+  await $`powershell -Command "Compress-Archive -Path 'artifacts/${binName}', 'artifacts/api' -DestinationPath '${zipFile}' -Force"`
+} else {
+  await $`cd artifacts && zip -r ${zipName}.zip ${binName} api/`
+}
 console.log(`完成: ${zipFile}`)
