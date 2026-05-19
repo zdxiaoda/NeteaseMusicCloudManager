@@ -131,7 +131,7 @@ export async function startTui(baseUrl: string): Promise<void> {
   if (apiAvailable) {
     logPanel.append("已检测到 API", "success");
   } else {
-    logPanel.append("未检测到 API，正在配置...", "warn");
+    logPanel.append("未检测到 API，正在配置...", "warning");
     
     // 弹窗提示用户输入API URL
     const choice = await modalManager.askChoice("未检测到 API 服务器", [
@@ -154,14 +154,14 @@ export async function startTui(baseUrl: string): Promise<void> {
         if (available) {
           logPanel.append("API 连接成功", "success");
         } else {
-          logPanel.append("API 连接失败，请检查 URL 或部署 API", "warn");
+          logPanel.append("API 连接失败，请检查 URL 或部署 API", "warning");
         }
       }
     } else if (choice === "deploy") {
       logPanel.append("请参考文档部署 API 服务器", "info");
       logPanel.append("部署后使用 '设置 API URL' 功能配置连接", "info");
     } else {
-      logPanel.append("已跳过 API 配置，部分功能可能不可用", "warn");
+      logPanel.append("已跳过 API 配置，部分功能可能不可用", "warning");
     }
   }
 
