@@ -5,6 +5,7 @@ interface AppConfig {
   session: SessionState;
   cloudCacheUpdatedAt: number;
   localScanPath: string;
+  apiUrl: string;
 }
 
 export class SessionStore {
@@ -13,7 +14,8 @@ export class SessionStore {
     defaults: {
       session: {},
       cloudCacheUpdatedAt: 0,
-      localScanPath: ""
+      localScanPath: "",
+      apiUrl: ""
     }
   });
 
@@ -43,5 +45,13 @@ export class SessionStore {
 
   setLocalScanPath(path: string): void {
     this.conf.set("localScanPath", path);
+  }
+
+  getApiUrl(): string {
+    return this.conf.get("apiUrl");
+  }
+
+  setApiUrl(url: string): void {
+    this.conf.set("apiUrl", url);
   }
 }
