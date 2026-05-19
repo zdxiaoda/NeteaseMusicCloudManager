@@ -1,6 +1,7 @@
 import axios from "axios";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import chalk from "chalk";
 
 declare const __COMPILED__: boolean;
 
@@ -81,7 +82,10 @@ export async function ensureApiServer(baseUrl: string): Promise<void> {
   // 非本地地址不自动启动
   if (!isLocalAddress(baseUrl)) return;
   // API 已就绪则跳过
-  if (await isApiReady(baseUrl)) return;
+  if (await isApiReady(baseUrl)) {
+    console.log(chalk.green("✓ 已检测到 API"));
+    return;
+  }
   
   // 只在开发模式下自动启动 API
   if (!isDevMode()) {
