@@ -158,7 +158,9 @@ export async function startTui(baseUrl: string): Promise<void> {
         }
       }
     } else if (choice === "deploy") {
-      logPanel.append("请参考文档部署 API 服务器", "info");
+      logPanel.append("请使用 GitHub 仓库中的脚本部署 API:", "info");
+      logPanel.append("https://github.com/zdxiaoda/NeteaseMusicCloudManager", "info");
+      logPanel.append("下载 scripts/start-api.sh 或 start-api.ps1 并运行", "info");
       logPanel.append("部署后使用 '设置 API URL' 功能配置连接", "info");
     } else {
       logPanel.append("已跳过 API 配置，部分功能可能不可用", "warning");

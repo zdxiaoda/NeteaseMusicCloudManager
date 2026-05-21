@@ -38,7 +38,29 @@
 
 API 服务是独立的网易云音乐后端，需要单独运行。
 
-**方式一：使用 npx/bunx 直接运行（推荐）**
+**方式一：一键启动脚本（推荐）**
+
+项目提供了自动安装 Bun 并启动 API 的脚本，自动处理环境配置和镜像加速：
+
+```bash
+# Linux / macOS
+./scripts/start-api.sh
+
+# Windows PowerShell
+.\scripts\start-api.ps1
+
+# 自定义端口
+PORT=8080 ./scripts/start-api.sh
+.\scripts\start-api.ps1 -Port 8080
+```
+
+脚本功能：
+- 自动检测并安装 Bun（Linux 使用官方脚本，Windows 优先使用 winget）
+- 自动刷新环境变量
+- 检测 npm 连接，无法访问时自动切换 npmmirror 镜像
+- 使用 bunx 启动 API 服务
+
+**方式二：使用 npx/bunx 直接运行**
 
 ```bash
 # 使用 bunx（需要安装 Bun）
@@ -48,13 +70,13 @@ PORT=3000 bunx @neteasecloudmusicapienhanced/api
 PORT=3000 npx @neteasecloudmusicapienhanced/api
 ```
 
-**方式二：Docker 部署**
+**方式三：Docker 部署**
 
 ```bash
 docker run -d -p 3000:3000 --name ncm-api binaryify/neteasecloudmusicapienhanced
 ```
 
-**方式三：后台运行（Linux）**
+**方式四：后台运行（Linux）**
 
 ```bash
 # 使用 nohup

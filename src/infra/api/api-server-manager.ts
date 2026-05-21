@@ -92,7 +92,7 @@ export async function ensureApiServer(baseUrl: string): Promise<void> {
     throw new Error(
       `无法连接到 API 服务器: ${baseUrl}\n` +
       "请先启动 API 服务器，或使用 --base-url 参数指定远程 API 地址。\n" +
-      "启动本地 API: PORT=3000 bunx @neteasecloudmusicapienhanced/api"
+      "使用仓库脚本部署: https://github.com/zdxiaoda/NeteaseMusicCloudManager"
     );
   }
 
@@ -108,7 +108,7 @@ export async function ensureApiServer(baseUrl: string): Promise<void> {
   if (!existsSync(appJsPath)) {
     throw new Error(
       `未找到 API 入口: ${appJsPath}\n` +
-        "请先手动启动 @neteasecloudmusicapienhanced/api，或设置 NCM_AUTO_START_API=0 关闭自动拉起。"
+        "请使用仓库脚本部署 API: https://github.com/zdxiaoda/NeteaseMusicCloudManager"
     );
   }
 
@@ -122,6 +122,6 @@ export async function ensureApiServer(baseUrl: string): Promise<void> {
   if (ready) return;
 
   throw new Error(
-    `自动启动网易云 API 失败，请按文档手动启动: PORT=${port} node "${appJsPath}"`
+    `自动启动网易云 API 失败，请使用仓库脚本手动部署:\nhttps://github.com/zdxiaoda/NeteaseMusicCloudManager`
   );
 }
