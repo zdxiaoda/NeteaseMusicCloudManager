@@ -109,48 +109,72 @@ export class CloudService {
     const tagMeta = await this.readMediaMeta(filePath);
     const stat = fs.statSync(filePath);
     const md5 = await this.hashMd5(filePath);
-    const tokenRes = await this.apiClient.postBody<UploadTokenResponse>("/cloud/upload/token", {
-      md5,
-      fileSize: stat.size,
-      filename: fileName
-    });
+
+    // 获取上传凭证（带重试）
+    const tokenRes = await this.withRetry(() =>
+      this.apiClient.postBody<UploadTokenResponse>("/cloud/upload/token", {
+        md5,
+        fileSize: stat.size,
+        filename: fileName
+      })
+    );
     if (tokenRes.code !== 200 || !tokenRes.data) {
       throw new Error(tokenRes.msg || "获取云盘上传凭证失败");
     }
     const tokenData = tokenRes.data;
 
     if (tokenData.needUpload) {
-      let lastLoaded = 0;
-      let lastAt = Date.now();
+      // 使用滑动窗口计算速度，更平滑
+      const speedWindow: Array<{ loaded: number; time: number }> = [];
+      const WINDOW_SIZE = 5; // 保留最近5个样本
       let loaded = 0;
+
       const uploadStream = fs.createReadStream(filePath);
       uploadStream.on("data", (chunk: Buffer) => {
         loaded += chunk.length;
         const now = Date.now();
-        const elapsedMs = Math.max(1, now - lastAt);
-        const speedBps = ((loaded - lastLoaded) * 1000) / elapsedMs;
-        lastLoaded = loaded;
-        lastAt = now;
+
+        // 添加到滑动窗口
+        speedWindow.push({ loaded, time: now });
+        if (speedWindow.length > WINDOW_SIZE) {
+          speedWindow.shift();
+        }
+
+        // 计算平均速度
+        let speedBps = 0;
+        if (speedWindow.length >= 2) {
+          const first = speedWindow[0]!;
+          const last = speedWindow[speedWindow.length - 1]!;
+          const elapsedMs = Math.max(1, last.time - first.time);
+          const bytesDiff = last.loaded - first.loaded;
+          speedBps = (bytesDiff * 1000) / elapsedMs;
+        }
+
         onProgress?.({
           loaded,
           total: stat.size,
-          speedBps: Math.max(0, speedBps)
+          speedBps: Math.max(0, Math.round(speedBps))
         });
       });
-      await axios({
-        method: "post",
-        url: tokenData.uploadUrl,
-        headers: {
-          "x-nos-token": tokenData.uploadToken,
-          "Content-MD5": md5,
-          "Content-Type": "audio/mpeg",
-          "Content-Length": String(stat.size)
-        },
-        data: uploadStream,
-        maxContentLength: Number.POSITIVE_INFINITY,
-        maxBodyLength: Number.POSITIVE_INFINITY,
-        timeout: 10 * 60 * 1000
-      });
+
+      // 上传文件（带重试）
+      await this.withRetry(() =>
+        axios({
+          method: "post",
+          url: tokenData.uploadUrl,
+          headers: {
+            "x-nos-token": tokenData.uploadToken,
+            "Content-MD5": md5,
+            "Content-Type": "audio/mpeg",
+            "Content-Length": String(stat.size)
+          },
+          data: uploadStream,
+          maxContentLength: Number.POSITIVE_INFINITY,
+          maxBodyLength: Number.POSITIVE_INFINITY,
+          timeout: 10 * 60 * 1000
+        })
+      );
+
       onProgress?.({
         loaded: stat.size,
         total: stat.size,
@@ -158,15 +182,18 @@ export class CloudService {
       });
     }
 
-    const completeRes = await this.apiClient.postBody<UploadCompleteResponse>("/cloud/upload/complete", {
-      songId: tokenData.songId,
-      resourceId: tokenData.resourceId,
-      md5: tokenData.md5 || md5,
-      filename: fileName,
-      song: tagMeta.song || fallbackSongName,
-      artist: tagMeta.artist,
-      album: tagMeta.album
-    });
+    // 完成上传（带重试）
+    const completeRes = await this.withRetry(() =>
+      this.apiClient.postBody<UploadCompleteResponse>("/cloud/upload/complete", {
+        songId: tokenData.songId,
+        resourceId: tokenData.resourceId,
+        md5: tokenData.md5 || md5,
+        filename: fileName,
+        song: tagMeta.song || fallbackSongName,
+        artist: tagMeta.artist,
+        album: tagMeta.album
+      })
+    );
     if (completeRes.code !== 200) {
       throw new Error(completeRes.msg || "云盘导入失败");
     }
@@ -343,6 +370,29 @@ export class CloudService {
       result.push(values.slice(i, i + size));
     }
     return result;
+  }
+
+  private async withRetry<T>(fn: () => Promise<T>, maxRetries = 3, baseDelay = 1000): Promise<T> {
+    let lastError: Error | undefined;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error as Error;
+        const msg = lastError.message || "";
+
+        // 只对 502/504/503 等服务器错误重试
+        const isRetryable = /50[234]/.test(msg) || /timeout/i.test(msg) || /ECONNRESET/i.test(msg);
+        if (!isRetryable || attempt >= maxRetries) {
+          throw lastError;
+        }
+
+        // 指数退避
+        const delay = baseDelay * Math.pow(2, attempt);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+    throw lastError!;
   }
 
   private hashMd5(filePath: string): Promise<string> {
