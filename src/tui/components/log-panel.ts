@@ -13,6 +13,7 @@ export interface LogPanelOptions {
 export interface LogPanel {
   container: BoxRenderable;
   append: (text: string, level?: "info" | "success" | "warning" | "error") => void;
+  updateLast: (text: string, level?: "info" | "success" | "warning" | "error") => void;
   clear: () => void;
 }
 
