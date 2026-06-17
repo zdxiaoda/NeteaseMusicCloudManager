@@ -77,6 +77,22 @@ export function createLogPanel(renderer: CliRenderer, options: LogPanelOptions =
     renderer.requestRender();
   };
 
+  const updateLast = (text: string, level: "info" | "success" | "warning" | "error" = "info") => {
+    const children = scrollBox.getChildren();
+    if (children.length > 0) {
+      const lastChild = children[children.length - 1];
+      const prefix = levelPrefixes[level] || "";
+      const color = levelColors[level] || THEME.text;
+
+      // 更新最后一个 TextRenderable 的内容
+      if (lastChild instanceof TextRenderable) {
+        lastChild.content = `${prefix}${text}`;
+        lastChild.fg = color;
+      }
+      renderer.requestRender();
+    }
+  };
+
   const clear = () => {
     const children = scrollBox.getChildren();
     for (const child of children) {
@@ -86,5 +102,5 @@ export function createLogPanel(renderer: CliRenderer, options: LogPanelOptions =
     renderer.requestRender();
   };
 
-  return { container, append, clear };
+  return { container, append, updateLast, clear };
 }
