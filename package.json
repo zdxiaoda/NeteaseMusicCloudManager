@@ -34,7 +34,7 @@
     "commander": "^15.0.0",
     "conf": "^15.1.0",
     "fast-glob": "^3.3.3",
-    "music-metadata": "^11.13.0",
+    "music-metadata": "^11.16.1",
     "p-queue": "^9.3.0",
     "pino": "^10.3.1",
     "pino-pretty": "^13.1.3",
